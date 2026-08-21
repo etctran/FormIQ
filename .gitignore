@@ -1,0 +1,20 @@
+# C++ / CMake
+cv-engine/build/
+*.o
+*.so
+*.dylib
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Secrets
+.env
+!.env.example
+
+# OS
+.DS_Store

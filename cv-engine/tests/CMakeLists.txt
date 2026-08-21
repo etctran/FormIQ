@@ -1,0 +1,3 @@
+add_executable(test_extractor test_extractor.cpp)
+target_link_libraries(test_extractor PRIVATE cv_engine_core)
+add_test(NAME test_extractor COMMAND test_extractor)
