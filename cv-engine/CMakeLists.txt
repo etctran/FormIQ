@@ -11,7 +11,12 @@ endif()
 
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
-find_package(OpenCV 4.8 REQUIRED COMPONENTS core imgproc videoio dnn)
+# 4.6 is the floor shipped by Ubuntu 24.04's libopencv-dev (what CI uses).
+# The old 4.8 floor existed only for cv::dnn::readNetFromTFLite, which this
+# codebase no longer uses; the sole remaining cv::dnn call is NMSBoxes, which
+# long predates 4.6. imgcodecs is listed explicitly because the tests cv::imread
+# their fixtures.
+find_package(OpenCV 4.6 REQUIRED COMPONENTS core imgproc imgcodecs videoio dnn)
 
 set(CV_ENGINE_MODELS_DIR "${CMAKE_SOURCE_DIR}/models")
 

@@ -1,3 +1,14 @@
+# Every test here states its invariants with assert(), but the default build
+# type is Release, whose CMAKE_CXX_FLAGS_RELEASE carries -DNDEBUG — which
+# compiles assert() to a no-op and makes the whole suite pass vacuously.
+# Undefine it for test targets only (it stays on for the library and the
+# pybind11 module, which are the perf-critical path).
+if(NOT MSVC)
+  add_compile_options(-UNDEBUG)
+else()
+  add_compile_options(/UNDEBUG)
+endif()
+
 add_executable(test_extractor test_extractor.cpp)
 target_link_libraries(test_extractor PRIVATE cv_engine_core)
 add_test(NAME test_extractor COMMAND test_extractor

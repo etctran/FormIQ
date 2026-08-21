@@ -18,8 +18,6 @@ namespace {
 // (SsdAnchorsCalculatorOptions / TensorsToDetectionsCalculatorOptions).
 constexpr int kInputSize = 224;
 constexpr int kNumLayers = 5;
-constexpr float kMinScale = 0.1484375F;
-constexpr float kMaxScale = 0.75F;
 constexpr int kStrides[kNumLayers] = {8, 16, 32, 32, 32};
 constexpr float kAnchorOffset = 0.5F;
 constexpr int kNumBoxes = 2254;
@@ -28,43 +26,6 @@ constexpr float kScoreClippingThresh = 100.0F;
 constexpr float kMinScoreThresh = 0.5F;
 constexpr float kBoxScale = 224.0F;
 constexpr float kNmsIouThreshold = 0.3F;  // our own choice, not from MediaPipe config
-
-struct Anchor {
-    float x_center;
-    float y_center;
-};
-
-float ScaleForLayer(int layer_index) {
-    if (kNumLayers == 1) return kMinScale;
-    return kMinScale +
-           (kMaxScale - kMinScale) * static_cast<float>(layer_index) /
-               static_cast<float>(kNumLayers - 1);
-}
-
-// Reproduces MediaPipe's SsdAnchorsCalculator with fixed_anchor_size=true
-// and a single aspect_ratio of 1.0 (which yields 2 anchors per grid cell,
-// matching num_boxes=2254). fixed_anchor_size means every anchor's
-// width/height is 1.0 in normalized space — only x_center/y_center vary.
-std::vector<Anchor> GenerateAnchors() {
-    std::vector<Anchor> anchors;
-    anchors.reserve(kNumBoxes);
-    for (int layer = 0; layer < kNumLayers; ++layer) {
-        const int stride = kStrides[layer];
-        const int feature_size =
-            static_cast<int>(std::ceil(static_cast<float>(kInputSize) / stride));
-        for (int y = 0; y < feature_size; ++y) {
-            for (int x = 0; x < feature_size; ++x) {
-                const float x_center = (x + kAnchorOffset) / feature_size;
-                const float y_center = (y + kAnchorOffset) / feature_size;
-                // aspect_ratios = [1.0] yields 2 anchors per cell (the
-                // standard extra scale-interpolated anchor for ratio 1.0).
-                anchors.push_back({x_center, y_center});
-                anchors.push_back({x_center, y_center});
-            }
-        }
-    }
-    return anchors;
-}
 
 float Sigmoid(float x) {
     x = std::clamp(x, -kScoreClippingThresh, kScoreClippingThresh);
@@ -98,6 +59,49 @@ cv::Mat PrepareInput(const cv::Mat& frame_bgr, int& square_side, int& pad_x, int
 }
 
 }  // namespace
+
+namespace detail {
+
+// Reproduces MediaPipe's SsdAnchorsCalculator with fixed_anchor_size=true and
+// a single aspect_ratio of 1.0 (2 anchors per grid cell per layer: the ratio-1.0
+// anchor plus the standard interpolated-scale anchor), matching num_boxes=2254.
+//
+// The subtlety: SsdAnchorsCalculator merges CONSECUTIVE layers that share a
+// stride into ONE grid pass, summing their per-cell anchor counts, rather than
+// running an independent pass per layer. kStrides = {8, 16, 32, 32, 32}, so
+// layers 2/3/4 collapse into a single 7x7 pass emitting 6 anchors per cell in
+// cell-major order — not three interleaved 7x7 passes of 2. Both produce 294
+// anchors, but the index -> center mapping differs for indices 1960..2253, and
+// the regressor output is indexed by anchor, so getting this wrong silently
+// decodes boxes against the wrong grid cell.
+std::vector<Anchor> GenerateAnchors() {
+    std::vector<Anchor> anchors;
+    anchors.reserve(kNumBoxes);
+    int layer = 0;
+    while (layer < kNumLayers) {
+        int last = layer;
+        int anchors_per_cell = 0;
+        while (last < kNumLayers && kStrides[last] == kStrides[layer]) {
+            anchors_per_cell += 2;  // aspect_ratio 1.0 + interpolated-scale anchor
+            ++last;
+        }
+        const int feature_size =
+            static_cast<int>(std::ceil(static_cast<float>(kInputSize) / kStrides[layer]));
+        for (int y = 0; y < feature_size; ++y) {
+            for (int x = 0; x < feature_size; ++x) {
+                const float x_center = (x + kAnchorOffset) / feature_size;
+                const float y_center = (y + kAnchorOffset) / feature_size;
+                for (int a = 0; a < anchors_per_cell; ++a) {
+                    anchors.push_back({x_center, y_center});
+                }
+            }
+        }
+        layer = last;
+    }
+    return anchors;
+}
+
+}  // namespace detail
 
 PoseDetector::PoseDetector(const std::string& model_path) {
     model_ = tflite::FlatBufferModel::BuildFromFile(model_path.c_str());
@@ -139,7 +143,7 @@ std::optional<Roi> PoseDetector::Detect(const cv::Mat& frame_bgr) const {
     const float* reg = interpreter_->typed_output_tensor<float>(regressors_idx);
     const float* sc = interpreter_->typed_output_tensor<float>(scores_idx);
 
-    static const std::vector<Anchor> anchors = GenerateAnchors();
+    static const std::vector<detail::Anchor> anchors = detail::GenerateAnchors();
 
     std::vector<cv::Rect2d> boxes;
     std::vector<float> confidences;

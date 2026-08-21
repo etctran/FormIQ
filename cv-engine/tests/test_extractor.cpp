@@ -27,6 +27,14 @@ int main() {
             assert(frame.landmarks.empty() ||
                    frame.landmarks.size() == formiq::kNumLandmarks);
         }
+        // The loop above passes vacuously if detection is dead on every frame,
+        // so assert detection actually fired: the fixture clip has a real,
+        // detectable person in it.
+        int populated = 0;
+        for (const auto& frame : frames) {
+            if (!frame.landmarks.empty()) ++populated;
+        }
+        assert(populated > 0);
         // Timestamps must be non-decreasing and reflect real video time.
         for (std::size_t i = 1; i < frames.size(); ++i) {
             assert(frames[i].timestamp_sec >= frames[i - 1].timestamp_sec);

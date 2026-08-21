@@ -45,7 +45,9 @@ std::vector<Keypoint> LandmarkRegressor::Regress(const cv::Mat& frame_bgr, const
     cv::Rect crop_rect = ClampedCropRect(roi, frame_bgr);
     std::vector<Keypoint> result(kNumLandmarks);
     if (crop_rect.width <= 0 || crop_rect.height <= 0) {
-        return result;  // all-zero, visibility 0 — degenerate ROI
+        // Degenerate ROI is "no pose detected", and the contract says that is
+        // an empty landmark vector — never 33 zero-visibility keypoints.
+        return {};
     }
 
     cv::Mat cropped = frame_bgr(crop_rect);

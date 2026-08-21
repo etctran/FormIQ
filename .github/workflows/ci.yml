@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build libopencv-dev
       - uses: astral-sh/setup-uv@v3
       - name: Sync
         working-directory: backend
