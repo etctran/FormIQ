@@ -4,7 +4,8 @@
 
 **Goal:** Replace `KeypointExtractor::Extract`'s empty-frame stub with real pose
 keypoint extraction, running MediaPipe's published pose-detector and
-pose-landmark TFLite models through OpenCV's `cv::dnn` module.
+pose-landmark TFLite models through LiteRT (TensorFlow Lite)'s C++
+interpreter.
 
 **Architecture:** `KeypointExtractor` decodes video via OpenCV `VideoCapture`,
 samples a subset of frames, and for each sampled frame runs a small pipeline:
@@ -13,9 +14,12 @@ detection) or reuse the last ROI, then `LandmarkRegressor` crops to that ROI
 and regresses 33 keypoints. Detector and landmark models are fetched at build
 time (not committed to git) into `cv-engine/models/`.
 
-**Tech Stack:** C++17, CMake, OpenCV ≥ 4.8 (`cv::dnn::readNetFromTFLite`),
-pybind11, MediaPipe's public `pose_detection.tflite` /
-`pose_landmark_lite.tflite` model weights.
+**Tech Stack:** C++17, CMake, OpenCV ≥ 4.8 (video decode/image prep, plus
+`cv::dnn::NMSBoxes`), LiteRT (TensorFlow Lite) C++ interpreter vendored via
+CMake `FetchContent` (pinned `v2.21.0`, no Bazel), pybind11, MediaPipe's
+public `pose_detection.tflite` / `pose_landmark_lite.tflite` model weights.
+*(Revised mid-implementation from a pure-OpenCV-`cv::dnn` approach — see
+Task 3's revision note and the spec's Key Decision #4 for why.)*
 
 **Spec:** `docs/superpowers/specs/2026-08-20-cv-engine-pose-extraction-design.md`
 
@@ -353,20 +357,39 @@ git commit -m "feat: add Roi struct and RoiTracker"
 
 ## Task 3: PoseDetector (SSD anchor decode + NMS)
 
+> **Revision note:** this task originally specified `cv::dnn::readNetFromTFLite`
+> for model inference. That was found, mid-implementation, to be unable to
+> load `pose_detection.tflite` — the model uses a `DENSIFY` op (weight-sparsity
+> compression) that OpenCV's TFLite importer doesn't support (confirmed on
+> two OpenCV versions; MediaPipe's asset bucket has no non-sparse variant).
+> This task now uses **LiteRT (TensorFlow Lite)'s own C++ interpreter**
+> instead — the runtime MediaPipe itself uses, so it has full op coverage by
+> construction. OpenCV is still used here for image prep
+> (resize/pad/color-convert) and for `cv::dnn::NMSBoxes`, just not for
+> loading the model. See the spec's revised Key Decision #4 for the full
+> rationale. The anchor-generation and score/box decode math below is
+> **unchanged** from the original version — that logic was never the
+> problem, only model loading was.
+
 **Files:**
 - Create: `cv-engine/include/pose_detector.h`
 - Create: `cv-engine/src/pose_detector.cpp`
 - Test: `cv-engine/tests/test_pose_detector.cpp`
 - Test fixture: `cv-engine/tests/fixtures/person.jpg`
 - Modify: `cv-engine/tests/CMakeLists.txt`
-- Modify: `cv-engine/CMakeLists.txt` (add `pose_detector.cpp` to `cv_engine_core`)
+- Modify: `cv-engine/CMakeLists.txt` (vendor LiteRT via `FetchContent`, add
+  `pose_detector.cpp` to `cv_engine_core`)
 
 **Interfaces:**
 - Consumes: `formiq::Roi` from Task 2.
 - Produces: `class formiq::PoseDetector` with constructor
   `PoseDetector(const std::string& model_path)` and method
   `std::optional<Roi> Detect(const cv::Mat& frame_bgr) const`. Consumed by
-  Task 5's orchestration loop.
+  Task 5's orchestration loop. **Unchanged from the original version** —
+  this is a pure implementation swap, not an interface change, so Task 5
+  and Task 6 need no changes on account of this revision.
+- Produces: CMake target `tensorflow-lite` (from the `FetchContent` block
+  below), available to Task 4 without re-declaring it.
 
 Anchor generation and score/box decoding use values verified against
 MediaPipe's public `pose_detection_cpu.pbtxt`
@@ -378,15 +401,42 @@ MediaPipe's public `pose_detection_cpu.pbtxt`
 `=224.0`, `reverse_output_order=true` (raw box values ordered `x,y,w,h`).
 NMS IoU threshold (`0.3`) is our own choice, not pulled from MediaPipe config.
 
-- [ ] **Step 1: Add a test fixture image**
+- [ ] **Step 1: Test fixture — already done**
 
-Add a small JPEG with one clearly-visible person, roughly upright, to
-`cv-engine/tests/fixtures/person.jpg` (a few hundred KB is fine — any royalty-free
-stock photo of someone standing works). This is a real binary asset committed
-to the repo (small, needed for every future test run — unlike the
-multi-megabyte models, this is fine to vendor).
+The controller already added `cv-engine/tests/fixtures/person.jpg`
+(MediaPipe's own official demo photo, a full-body person, verified visually).
+Nothing to do here — skip to Step 2.
 
-- [ ] **Step 2: Write the failing test**
+- [ ] **Step 2: Vendor LiteRT via CMake FetchContent**
+
+Add to `cv-engine/CMakeLists.txt`, right after Task 1's
+`add_dependencies(cv_engine_core fetch_models)` line:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+  tensorflow
+  GIT_REPOSITORY https://github.com/tensorflow/tensorflow.git
+  GIT_TAG v2.21.0
+  GIT_SHALLOW TRUE
+  SOURCE_SUBDIR tensorflow/lite
+)
+set(TFLITE_ENABLE_XNNPACK OFF CACHE BOOL "" FORCE)
+set(TFLITE_ENABLE_GPU OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(tensorflow)
+
+target_link_libraries(cv_engine_core PUBLIC tensorflow-lite)
+```
+
+Run: `cmake -S cv-engine -B cv-engine/build -GNinja` (with the `-Dpybind11_DIR=...`
+flag from your dispatch context) then `cmake --build cv-engine/build`.
+Expected: this is slow the first time — CMake shallow-clones the TensorFlow
+repo and compiles LiteRT from source. Budget real time for this (can be
+10+ minutes depending on hardware/network). Confirm the existing
+`test_extractor` and `test_roi_tracker` still pass afterward — this step
+should be a pure addition, nothing else should break.
+
+- [ ] **Step 3: Write the failing test**
 
 ```cpp
 // cv-engine/tests/test_pose_detector.cpp
@@ -420,7 +470,7 @@ int main() {
 }
 ```
 
-- [ ] **Step 3: Add the test target and run to verify it fails**
+- [ ] **Step 4: Add the test target and run to verify it fails**
 
 Add to `cv-engine/tests/CMakeLists.txt`:
 
@@ -432,27 +482,34 @@ add_test(NAME test_pose_detector COMMAND test_pose_detector
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 ```
 
+(`tensorflow-lite` is already linked transitively via `cv_engine_core` —
+that link is `PUBLIC` from Step 2, so nothing further needed here.)
+
 Run: `cmake --build cv-engine/build`
 Expected: FAIL — `pose_detector.h` doesn't exist yet.
 
-- [ ] **Step 4: Write `pose_detector.h`**
+- [ ] **Step 5: Write `pose_detector.h`**
 
 ```cpp
 // cv-engine/include/pose_detector.h
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 
-#include <opencv2/dnn.hpp>
+#include <opencv2/core.hpp>
+#include <tensorflow/lite/interpreter.h>
+#include <tensorflow/lite/model.h>
 
 #include "roi.h"
 
 namespace formiq {
 
 // Runs MediaPipe's published pose-detection TFLite model (SSD-style,
-// 2254 anchors) via OpenCV's DNN module to find a single person's bounding
-// box in a frame. Returns std::nullopt if no box clears min_score_thresh.
+// 2254 anchors) via LiteRT's C++ interpreter to find a single person's
+// bounding box in a frame. Returns std::nullopt if no box clears
+// min_score_thresh.
 class PoseDetector {
 public:
     explicit PoseDetector(const std::string& model_path);
@@ -460,13 +517,14 @@ public:
     std::optional<Roi> Detect(const cv::Mat& frame_bgr) const;
 
 private:
-    mutable cv::dnn::Net net_;
+    std::unique_ptr<tflite::FlatBufferModel> model_;
+    std::unique_ptr<tflite::Interpreter> interpreter_;
 };
 
 }  // namespace formiq
 ```
 
-- [ ] **Step 5: Write `pose_detector.cpp`**
+- [ ] **Step 6: Write `pose_detector.cpp`**
 
 ```cpp
 // cv-engine/src/pose_detector.cpp
@@ -474,9 +532,13 @@ private:
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <stdexcept>
 #include <vector>
 
+#include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
+#include <tensorflow/lite/kernels/register.h>
 
 namespace formiq {
 namespace {
@@ -488,6 +550,7 @@ constexpr float kMaxScale = 0.75F;
 constexpr int kStrides[kNumLayers] = {8, 16, 32, 32, 32};
 constexpr float kAnchorOffset = 0.5F;
 constexpr int kNumBoxes = 2254;
+constexpr int kNumCoords = 12;
 constexpr float kScoreClippingThresh = 100.0F;
 constexpr float kMinScoreThresh = 0.5F;
 constexpr float kBoxScale = 224.0F;
@@ -537,8 +600,11 @@ float Sigmoid(float x) {
 
 // Square-pads frame_bgr to a square (letterbox) then resizes to
 // kInputSize x kInputSize, matching MediaPipe's ImageToTensorCalculator
-// FIT scaling. Returns the square side length used (in original pixels)
-// and the top/left padding, so detected boxes can be mapped back.
+// FIT scaling, converts to RGB float32 in [-1, 1]. Returns an HxWx3
+// CV_32FC3 cv::Mat whose row-major byte layout matches the interpreter's
+// expected NHWC input tensor exactly (safe to memcpy directly). Also
+// returns the square side length used (in original pixels) and the
+// top/left padding, so detected boxes can be mapped back.
 cv::Mat PrepareInput(const cv::Mat& frame_bgr, int& square_side, int& pad_x, int& pad_y) {
     square_side = std::max(frame_bgr.cols, frame_bgr.rows);
     pad_x = (square_side - frame_bgr.cols) / 2;
@@ -552,45 +618,63 @@ cv::Mat PrepareInput(const cv::Mat& frame_bgr, int& square_side, int& pad_x, int
 
     cv::Mat rgb;
     cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-    cv::Mat blob = cv::dnn::blobFromImage(rgb, 1.0 / 127.5, cv::Size(), cv::Scalar(), false, false, CV_32F);
-    // blobFromImage scales to [0, 2/127.5*255]; shift into MediaPipe's
-    // expected [-1, 1] input range.
-    blob -= 1.0;
-    return blob;
+
+    cv::Mat float_image;
+    rgb.convertTo(float_image, CV_32FC3, 1.0 / 127.5, -1.0);  // [0,255] -> [-1,1]
+    return float_image;
 }
 
 }  // namespace
 
 PoseDetector::PoseDetector(const std::string& model_path) {
-    net_ = cv::dnn::readNetFromTFLite(model_path);
+    model_ = tflite::FlatBufferModel::BuildFromFile(model_path.c_str());
+    if (!model_) {
+        throw std::runtime_error("PoseDetector: failed to load model at " + model_path);
+    }
+    tflite::ops::builtin::BuiltinOpResolver resolver;
+    tflite::InterpreterBuilder builder(*model_, resolver);
+    builder(&interpreter_);
+    if (!interpreter_ || interpreter_->AllocateTensors() != kTfLiteOk) {
+        throw std::runtime_error("PoseDetector: failed to build interpreter for " + model_path);
+    }
 }
 
 std::optional<Roi> PoseDetector::Detect(const cv::Mat& frame_bgr) const {
     int square_side = 0;
     int pad_x = 0;
     int pad_y = 0;
-    cv::Mat blob = PrepareInput(frame_bgr, square_side, pad_x, pad_y);
+    cv::Mat input_image = PrepareInput(frame_bgr, square_side, pad_x, pad_y);
 
-    net_.setInput(blob);
-    std::vector<cv::Mat> outputs;
-    net_.forward(outputs, net_.getUnconnectedOutLayersNames());
-    // Expect two outputs: regressors [1, 2254, 12] and scores [1, 2254, 1],
-    // in the order OpenCV's DNN reports the model's output layers.
-    if (outputs.size() < 2) return std::nullopt;
-    const cv::Mat& regressors = outputs[0].total() > outputs[1].total() ? outputs[0] : outputs[1];
-    const cv::Mat& scores = outputs[0].total() > outputs[1].total() ? outputs[1] : outputs[0];
+    float* input_tensor = interpreter_->typed_input_tensor<float>(0);
+    std::memcpy(input_tensor, input_image.ptr<float>(0), input_image.total() * input_image.elemSize());
+
+    if (interpreter_->Invoke() != kTfLiteOk) return std::nullopt;
+
+    // Select outputs by element count, not index — export order isn't
+    // guaranteed. Same approach as the original cv::dnn version used.
+    int regressors_idx = -1;
+    int scores_idx = -1;
+    for (std::size_t i = 0; i < interpreter_->outputs().size(); ++i) {
+        const TfLiteTensor* t = interpreter_->output_tensor(static_cast<int>(i));
+        int count = 1;
+        for (int d = 0; d < t->dims->size; ++d) count *= t->dims->data[d];
+        if (count == kNumBoxes * kNumCoords) regressors_idx = static_cast<int>(i);
+        else if (count == kNumBoxes) scores_idx = static_cast<int>(i);
+    }
+    if (regressors_idx < 0 || scores_idx < 0) return std::nullopt;
+
+    const float* reg = interpreter_->typed_output_tensor<float>(regressors_idx);
+    const float* sc = interpreter_->typed_output_tensor<float>(scores_idx);
 
     static const std::vector<Anchor> anchors = GenerateAnchors();
-    const float* reg = reinterpret_cast<const float*>(regressors.data);
-    const float* sc = reinterpret_cast<const float*>(scores.data);
 
-    std::vector<cv::Rect2f> boxes;
+    std::vector<cv::Rect2d> boxes;
     std::vector<float> confidences;
     for (int i = 0; i < kNumBoxes && i < static_cast<int>(anchors.size()); ++i) {
         const float score = Sigmoid(sc[i]);
         if (score < kMinScoreThresh) continue;
 
-        const float* box = reg + (i * 12);
+        const float* box = reg + (i * kNumCoords);
         // reverse_output_order=true -> raw order is x, y, w, h.
         const float cx = box[0] / kBoxScale + anchors[i].x_center;
         const float cy = box[1] / kBoxScale + anchors[i].y_center;
@@ -614,41 +698,53 @@ std::optional<Roi> PoseDetector::Detect(const cv::Mat& frame_bgr) const {
         if (confidences[idx] > confidences[best]) best = idx;
     }
 
-    const cv::Rect2f& box = boxes[best];
+    const cv::Rect2d& box = boxes[best];
     Roi roi;
-    roi.x_center = (box.x + box.width / 2) * square_side - pad_x;
-    roi.y_center = (box.y + box.height / 2) * square_side - pad_y;
-    roi.width = box.width * square_side;
-    roi.height = box.height * square_side;
+    roi.x_center = static_cast<float>((box.x + box.width / 2) * square_side) - pad_x;
+    roi.y_center = static_cast<float>((box.y + box.height / 2) * square_side) - pad_y;
+    roi.width = static_cast<float>(box.width * square_side);
+    roi.height = static_cast<float>(box.height * square_side);
     return roi;
 }
 
 }  // namespace formiq
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+(Note: `cv::dnn::NMSBoxes` is used here with `cv::Rect2d`, not `cv::Rect2f`
+— the original version used `Rect2f`, but this OpenCV build only provides
+the `Rect2d` overload. If your environment's OpenCV does have a `Rect2f`
+overload, either works; `Rect2d` is safe regardless.)
+
+- [ ] **Step 7: Run test to verify it passes**
 
 Run: `cmake --build cv-engine/build && ctest --test-dir cv-engine/build -R test_pose_detector --output-on-failure`
-Expected: PASS. If the person-photo assertion fails, print `roi.x_center,
-roi.y_center, roi.width, roi.height` and sanity-check by eye against the
-fixture image dimensions — a wrong output-tensor-order guess (regressors vs.
-scores swapped) is the most likely bug; the `outputs[0].total() >
-outputs[1].total()` heuristic picks the larger tensor (2254×12) as
-regressors, but confirm this against `net_.getUnconnectedOutLayersNames()`
-if it fails.
+Expected: PASS. If the person-photo assertion fails, print
+`regressors_idx`, `scores_idx`, and the raw `roi.x_center, roi.y_center,
+roi.width, roi.height` and sanity-check by eye against the fixture image
+dimensions (1000x667). Also print `GenerateAnchors().size()` — it must be
+exactly 2254; if it isn't, the anchor loop has a bug and that's a more
+likely culprit than the box-decode math.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add cv-engine/include/pose_detector.h cv-engine/src/pose_detector.cpp \
-        cv-engine/tests/test_pose_detector.cpp cv-engine/tests/fixtures/person.jpg \
-        cv-engine/tests/CMakeLists.txt cv-engine/CMakeLists.txt
-git commit -m "feat: add PoseDetector (SSD anchor decode over MediaPipe model)"
+        cv-engine/tests/test_pose_detector.cpp cv-engine/tests/CMakeLists.txt \
+        cv-engine/CMakeLists.txt
+git commit -m "feat: add PoseDetector (SSD anchor decode via LiteRT over MediaPipe model)"
 ```
 
 ---
 
 ## Task 4: LandmarkRegressor
+
+> **Revision note:** like Task 3, this task originally specified
+> `cv::dnn::readNetFromTFLite`. Use LiteRT's C++ interpreter instead — see
+> Task 3's revision note for why. `tensorflow-lite` is already vendored (by
+> Task 3's `FetchContent` block) and already linked into `cv_engine_core`;
+> nothing further to add there. The output-tensor-shape introspection in
+> Step 1 and the decode math in Step 5 are unaffected by this — only how
+> the model is loaded and invoked changes.
 
 **Files:**
 - Create: `cv-engine/include/landmark_regressor.h`
@@ -766,18 +862,21 @@ Expected: FAIL — `landmark_regressor.h` doesn't exist yet.
 // cv-engine/include/landmark_regressor.h
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
-#include <opencv2/dnn.hpp>
+#include <opencv2/core.hpp>
+#include <tensorflow/lite/interpreter.h>
+#include <tensorflow/lite/model.h>
 
 #include "keypoints.h"
 #include "roi.h"
 
 namespace formiq {
 
-// Runs MediaPipe's published pose-landmark TFLite model via OpenCV's DNN
-// module on a frame cropped to a Roi. Always returns kNumLandmarks (33)
+// Runs MediaPipe's published pose-landmark TFLite model via LiteRT's C++
+// interpreter on a frame cropped to a Roi. Always returns kNumLandmarks (33)
 // keypoints — per-keypoint confidence is carried in Keypoint::visibility,
 // not a per-call optional (a low-confidence regression still returns 33
 // keypoints with low visibility, unlike PoseDetector's per-frame miss).
@@ -788,7 +887,8 @@ public:
     std::vector<Keypoint> Regress(const cv::Mat& frame_bgr, const Roi& roi) const;
 
 private:
-    mutable cv::dnn::Net net_;
+    std::unique_ptr<tflite::FlatBufferModel> model_;
+    std::unique_ptr<tflite::Interpreter> interpreter_;
 };
 
 }  // namespace formiq
@@ -808,8 +908,11 @@ selection accordingly before treating this step as done.
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <stdexcept>
 
 #include <opencv2/imgproc.hpp>
+#include <tensorflow/lite/kernels/register.h>
 
 namespace formiq {
 namespace {
@@ -831,7 +934,16 @@ cv::Rect ClampedCropRect(const Roi& roi, const cv::Mat& frame) {
 }  // namespace
 
 LandmarkRegressor::LandmarkRegressor(const std::string& model_path) {
-    net_ = cv::dnn::readNetFromTFLite(model_path);
+    model_ = tflite::FlatBufferModel::BuildFromFile(model_path.c_str());
+    if (!model_) {
+        throw std::runtime_error("LandmarkRegressor: failed to load model at " + model_path);
+    }
+    tflite::ops::builtin::BuiltinOpResolver resolver;
+    tflite::InterpreterBuilder builder(*model_, resolver);
+    builder(&interpreter_);
+    if (!interpreter_ || interpreter_->AllocateTensors() != kTfLiteOk) {
+        throw std::runtime_error("LandmarkRegressor: failed to build interpreter for " + model_path);
+    }
 }
 
 std::vector<Keypoint> LandmarkRegressor::Regress(const cv::Mat& frame_bgr, const Roi& roi) const {
@@ -842,29 +954,37 @@ std::vector<Keypoint> LandmarkRegressor::Regress(const cv::Mat& frame_bgr, const
     }
 
     cv::Mat cropped = frame_bgr(crop_rect);
+    cv::Mat resized;
+    cv::resize(cropped, resized, cv::Size(kInputSize, kInputSize));
     cv::Mat rgb;
-    cv::cvtColor(cropped, rgb, cv::COLOR_BGR2RGB);
-    cv::Mat blob = cv::dnn::blobFromImage(rgb, 1.0 / 127.5, cv::Size(kInputSize, kInputSize),
-                                           cv::Scalar(), false, false, CV_32F);
-    blob -= 1.0;  // shift blobFromImage's [0, ~2] scale into MediaPipe's [-1, 1]
+    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+    cv::Mat float_image;
+    rgb.convertTo(float_image, CV_32FC3, 1.0 / 127.5, -1.0);  // [0,255] -> [-1,1]
 
-    net_.setInput(blob);
-    std::vector<cv::Mat> outputs;
-    net_.forward(outputs, net_.getUnconnectedOutLayersNames());
-    if (outputs.empty()) return result;
+    float* input_tensor = interpreter_->typed_input_tensor<float>(0);
+    std::memcpy(input_tensor, float_image.ptr<float>(0), float_image.total() * float_image.elemSize());
+
+    if (interpreter_->Invoke() != kTfLiteOk) return result;
 
     // The 195-value landmarks tensor is the largest output; select it by
     // element count rather than assuming index 0 (matches the introspection
     // approach used for PoseDetector).
-    const cv::Mat* landmarks_tensor = &outputs[0];
-    for (const auto& out : outputs) {
-        if (out.total() > landmarks_tensor->total()) landmarks_tensor = &out;
+    int landmarks_idx = -1;
+    int landmarks_count = 0;
+    for (std::size_t i = 0; i < interpreter_->outputs().size(); ++i) {
+        const TfLiteTensor* t = interpreter_->output_tensor(static_cast<int>(i));
+        int count = 1;
+        for (int d = 0; d < t->dims->size; ++d) count *= t->dims->data[d];
+        if (count > landmarks_count) {
+            landmarks_count = count;
+            landmarks_idx = static_cast<int>(i);
+        }
     }
-    if (static_cast<int>(landmarks_tensor->total()) < kNumRawLandmarks * kValuesPerLandmark) {
+    if (landmarks_idx < 0 || landmarks_count < kNumRawLandmarks * kValuesPerLandmark) {
         return result;
     }
 
-    const float* raw = reinterpret_cast<const float*>(landmarks_tensor->data);
+    const float* raw = interpreter_->typed_output_tensor<float>(landmarks_idx);
     const float sx = static_cast<float>(crop_rect.width) / kInputSize;
     const float sy = static_cast<float>(crop_rect.height) / kInputSize;
 
@@ -1086,8 +1206,8 @@ constexpr int kFrameSampleInterval = 4;
 
 // Both models load here, at construction — a missing/corrupt model file
 // throws immediately (propagated from PoseDetector/LandmarkRegressor's own
-// constructors via cv::dnn::readNetFromTFLite), not partway through a later
-// Extract() call.
+// constructors, which fail via LiteRT's FlatBufferModel/InterpreterBuilder),
+// not partway through a later Extract() call.
 KeypointExtractor::KeypointExtractor(const std::string& detector_model_path,
                                       const std::string& landmark_model_path)
     : detector_(detector_model_path), regressor_(landmark_model_path) {}
@@ -1276,11 +1396,14 @@ the builder stage:
 
 ```dockerfile
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake ninja-build libopencv-dev curl \
+    build-essential cmake ninja-build libopencv-dev curl git \
     && rm -rf /var/lib/apt/lists/*
 ```
 
-(`curl` is needed by `fetch_models.sh`.)
+(`curl` is needed by `fetch_models.sh`; `git` is needed by Task 3's CMake
+`FetchContent` step, which shallow-clones TensorFlow to build LiteRT — this
+also means the builder stage's build time increases materially versus a
+plain OpenCV-only build. Budget real time for `docker build` here.)
 
 - [ ] **Step 2: Copy the fetched models into the final stage**
 
