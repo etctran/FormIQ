@@ -1405,10 +1405,45 @@ git commit -m "ci: install OpenCV + pybind11 for the cv-engine build"
 
 ## Task 8: Docker — install OpenCV, ship the models directory
 
+> **Note found while running this task:** the first real Linux build (this
+> Docker build is the first one — every prior local build in this plan ran
+> on macOS) failed at the link step: `cv_engine_core` (a static library)
+> and the vendored `tensorflow-lite` static library get linked into
+> `cv_engine`, a *shared* pybind11 module — on Linux/GCC that requires
+> every constituent object to be compiled with `-fPIC`, which nothing in
+> `cv-engine/CMakeLists.txt` currently sets. macOS's toolchain has been
+> silently tolerating its absence, masking this since Task 1. Fixed via
+> **Step 0** below — a one-line, standard, unambiguous CMake fix (not a
+> design fork), so ruled on directly rather than escalated.
+
 **Files:**
+- Modify: `cv-engine/CMakeLists.txt`
 - Modify: `infra/docker/backend.Dockerfile`
 
 **Interfaces:** None — infra-only change.
+
+- [ ] **Step 0: Make all cv-engine targets position-independent**
+
+In `cv-engine/CMakeLists.txt`, add one line right after the existing
+`set(CMAKE_CXX_STANDARD_REQUIRED ON)` line (before any `find_package`,
+`add_library`, or `FetchContent` call, so it applies globally — including
+to the vendored `tensorflow-lite` target):
+
+```cmake
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+```
+
+Verify locally first (before touching Docker) — reconfigure and rebuild:
+
+```bash
+cmake -S cv-engine -B cv-engine/build -GNinja  # (with your -Dpybind11_DIR= flag)
+cmake --build cv-engine/build
+```
+
+This should still succeed on macOS (this flag is a no-op there in
+practice, since Apple's toolchain already defaults to PIC) — confirms the
+fix doesn't regress local builds before you rely on it inside Docker,
+where it's actually load-bearing.
 
 - [ ] **Step 1: Update the builder stage**
 
@@ -1472,8 +1507,8 @@ present and correctly wired at the compiled path).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add infra/docker/backend.Dockerfile
-git commit -m "docker: install OpenCV and ship pose models in the backend image"
+git add cv-engine/CMakeLists.txt infra/docker/backend.Dockerfile
+git commit -m "docker: install OpenCV, ship pose models, fix Linux PIC link error"
 ```
 
 ---
