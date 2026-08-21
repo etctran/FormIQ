@@ -51,11 +51,23 @@ This spec designs the real extraction logic that produces the 33-landmark-per-fr
    with Bazel, which has no clean interop with this repo's CMake/pybind11
    toolchain. Rather than vendoring a second build system, this design runs
    MediaPipe's **published pose-detector and pose-landmark TFLite models**
-   directly through `cv::dnn` (OpenCV ≥ 4.8's TFLite import support,
-   `cv::dnn::readNetFromTFLite`). We reimplement the orchestration MediaPipe's
-   graph normally provides — detect → crop to ROI → regress landmarks → track
-   ROI across frames — ourselves in C++. This runs Google's actual trained
-   weights without linking Google's mediapipe library.
+   directly through **LiteRT (TensorFlow Lite)'s own C++ interpreter library**,
+   vendored via CMake's `FetchContent` (LiteRT ships an official standalone
+   CMake build, pinned to release tag `v2.21.0`, no Bazel required — verified
+   against Google's own build docs). We reimplement the orchestration
+   MediaPipe's graph normally provides — detect → crop to ROI → regress
+   landmarks → track ROI across frames — ourselves in C++. This runs Google's
+   actual trained weights, unmodified, without linking Google's mediapipe
+   library.
+   *(Revision: an earlier version of this decision specified OpenCV's
+   `cv::dnn::readNetFromTFLite` instead. That was found mid-implementation to
+   be unable to load the pose-detector model — it uses a `DENSIFY` op
+   (weight-sparsity compression) that OpenCV's TFLite importer doesn't
+   support, confirmed via direct testing and cross-checked against OpenCV
+   5.0.0 too. LiteRT's own interpreter is the runtime MediaPipe itself uses,
+   so it has full op coverage by construction. OpenCV is still used for video
+   decode (`VideoCapture`) and image prep (`imgproc`: resize/crop/color
+   convert) — just not for model inference.)*
 5. **Model asset acquisition:** the two `.tflite` model files (a few MB each)
    are fetched at build time from Google's model zoo (pinned version/URL), not
    committed to git. Fetched in both the Docker builder stage and local
@@ -68,16 +80,16 @@ This spec designs the real extraction logic that produces the 33-landmark-per-fr
 video file (OpenCV VideoCapture)
    │  decode frames, sample every Nth frame (downsample from 30fps)
    ▼
-PoseDetector          — cv::dnn net running MediaPipe's pose-detector model
-   │                     outputs a person bounding box per sampled frame,
-   │                     or nothing if no person detected
+PoseDetector          — tflite::Interpreter running MediaPipe's pose-detector
+   │                     model, outputs a person bounding box per sampled
+   │                     frame, or nothing if no person detected
    ▼
 RoiTracker             — holds last-known ROI; reuses/extrapolates it when a
    │                     sampled frame is skipped for re-detection, so we
    │                     don't re-run the (more expensive) detector every frame
    ▼
-LandmarkRegressor      — cv::dnn net running MediaPipe's pose-landmark model,
-   │                     cropped to the ROI → 33 {x,y,z,visibility} keypoints
+LandmarkRegressor      — tflite::Interpreter running MediaPipe's pose-landmark
+   │                     model, cropped to the ROI → 33 {x,y,z,visibility} keypoints
    ▼
 Frame{timestamp_sec, landmarks}   — landmarks empty if detection failed
 ```
@@ -94,14 +106,17 @@ spec) isn't affected by the sampling strategy.
 
 ## Components (new/changed under `cv-engine/`)
 
-- `include/pose_detector.h` / `src/pose_detector.cpp` — wraps a `cv::dnn::Net`
-  loaded from the pose-detector TFLite model. Input: a frame (`cv::Mat`).
-  Output: an optional ROI (bounding box), `std::nullopt` if nothing detected.
+- `include/pose_detector.h` / `src/pose_detector.cpp` — wraps a
+  `tflite::Interpreter` loaded from the pose-detector TFLite model via
+  `tflite::FlatBufferModel` + `tflite::InterpreterBuilder`. Input: a frame
+  (`cv::Mat`, resized/converted with OpenCV `imgproc` before being copied
+  into the interpreter's input tensor). Output: an optional ROI (bounding
+  box), `std::nullopt` if nothing detected.
 - `include/landmark_regressor.h` / `src/landmark_regressor.cpp` — wraps a
-  `cv::dnn::Net` loaded from the pose-landmark TFLite model. Input: a frame
-  cropped to an ROI. Output: 33 `Keypoint`s (may include low-visibility points
-  if the model itself reports low confidence — that's a per-keypoint
-  `visibility` value, not a per-frame miss).
+  `tflite::Interpreter` loaded from the pose-landmark TFLite model the same
+  way. Input: a frame cropped to an ROI. Output: 33 `Keypoint`s (may include
+  low-visibility points if the model itself reports low confidence — that's
+  a per-keypoint `visibility` value, not a per-frame miss).
 - `include/roi_tracker.h` / `src/roi_tracker.cpp` — holds the last-known ROI
   across sampled frames and decides, per frame, whether to re-run the detector
   or reuse/extrapolate the existing ROI.
@@ -153,19 +168,32 @@ spec) isn't affected by the sampling strategy.
 ## Build / Docker changes
 
 - `cv-engine/CMakeLists.txt`:
-  - Add `find_package(OpenCV REQUIRED)` (requires OpenCV ≥ 4.8 for
-    `cv::dnn::readNetFromTFLite`), link into `cv_engine_core`.
+  - Add `find_package(OpenCV REQUIRED)` (video decode + image prep; the
+    `dnn` component is kept only for the `cv::dnn::NMSBoxes` utility used in
+    the detector's post-processing, not for loading any model).
+  - Vendor LiteRT via `FetchContent` (`GIT_REPOSITORY
+    https://github.com/tensorflow/tensorflow.git`, `GIT_TAG v2.21.0`,
+    `GIT_SHALLOW TRUE`, `SOURCE_SUBDIR tensorflow/lite`), with
+    `TFLITE_ENABLE_XNNPACK`/`TFLITE_ENABLE_GPU` off to keep the build
+    minimal (CPU-only, per Non-goals). Link the `tensorflow-lite` target.
+    This is a real, honest build-time and disk-space cost — a shallow clone
+    of TensorFlow's monorepo is still large even at depth 1 — accepted as
+    the tradeoff for correct model loading.
   - Add a build step invoking `scripts/fetch_models.sh` before compiling
     tests/the module, so `models/` is populated for both build and `ctest`.
 - `infra/docker/backend.Dockerfile`:
   - Builder stage: install OpenCV dev libraries (`apt-get install
     libopencv-dev` or equivalent) alongside the existing build toolchain.
+    LiteRT is built from source via the CMake step above — no separate
+    system package needed, but builder-stage build time increases
+    materially (compiling TFLite plus the FetchContent clone).
   - Builder stage: model fetch runs as part of the `cv-engine` build (via the
     CMake step above), landing in `models/`.
   - Final stage: `COPY` the populated `models/` directory alongside the
     compiled extension so it's present at runtime — the extractor loads
     models from a fixed path in the built image, not the network, at
-    inference time.
+    inference time. LiteRT is statically linked into the compiled
+    extension, so the final stage needs no LiteRT runtime package.
 
 ## Open questions for the implementation plan
 
