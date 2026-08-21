@@ -1,0 +1,11 @@
+// cv-engine/include/model_paths.h.in
+#pragma once
+
+namespace formiq {
+
+inline constexpr const char* kDefaultPoseDetectorModelPath =
+    "@CV_ENGINE_MODELS_DIR@/pose_detection.tflite";
+inline constexpr const char* kDefaultPoseLandmarkModelPath =
+    "@CV_ENGINE_MODELS_DIR@/pose_landmark_lite.tflite";
+
+}  // namespace formiq

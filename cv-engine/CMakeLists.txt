@@ -14,6 +14,12 @@ find_package(OpenCV 4.8 REQUIRED COMPONENTS core imgproc videoio dnn)
 
 set(CV_ENGINE_MODELS_DIR "${CMAKE_SOURCE_DIR}/models")
 
+configure_file(
+  "${CMAKE_SOURCE_DIR}/include/model_paths.h.in"
+  "${CMAKE_BINARY_DIR}/generated/model_paths.h"
+  @ONLY
+)
+
 add_custom_command(
   OUTPUT "${CV_ENGINE_MODELS_DIR}/pose_detection.tflite"
          "${CV_ENGINE_MODELS_DIR}/pose_landmark_lite.tflite"
@@ -33,6 +39,7 @@ add_library(cv_engine_core STATIC
   src/landmark_regressor.cpp
 )
 target_include_directories(cv_engine_core PUBLIC include)
+target_include_directories(cv_engine_core PUBLIC "${CMAKE_BINARY_DIR}/generated")
 target_link_libraries(cv_engine_core PUBLIC ${OpenCV_LIBS})
 target_include_directories(cv_engine_core PUBLIC ${OpenCV_INCLUDE_DIRS})
 add_dependencies(cv_engine_core fetch_models)
