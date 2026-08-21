@@ -136,11 +136,15 @@ add_custom_target(fetch_models ALL
 )
 ```
 
-And add `target_link_libraries(cv_engine_core PUBLIC ${OpenCV_LIBS})` plus
-`target_include_directories(cv_engine_core PUBLIC ${OpenCV_INCLUDE_DIRS})`
-right after the existing `cv_engine_core` target definition. Make
-`cv_engine_core` depend on the fetch: `add_dependencies(cv_engine_core
-fetch_models)`.
+Then edit the existing `cv_engine_core` target definition (the
+`add_library(cv_engine_core STATIC ...)` block already in the file) to add
+three lines directly below it:
+
+```cmake
+target_link_libraries(cv_engine_core PUBLIC ${OpenCV_LIBS})
+target_include_directories(cv_engine_core PUBLIC ${OpenCV_INCLUDE_DIRS})
+add_dependencies(cv_engine_core fetch_models)
+```
 
 - [ ] **Step 5: Verify CMake configures and builds cleanly**
 
