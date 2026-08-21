@@ -14,9 +14,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libopencv-dev
+      - name: Install pybind11
+        run: pip install --user pybind11
       - name: Configure
-        run: cmake -S cv-engine -B cv-engine/build -GNinja
+        run: |
+          cmake -S cv-engine -B cv-engine/build -GNinja \
+            -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
       - name: Build
         run: cmake --build cv-engine/build
       - name: Test
