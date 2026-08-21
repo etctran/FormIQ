@@ -1342,29 +1342,50 @@ git commit -m "feat: expose configurable model paths in KeypointExtractor bindin
 
 ---
 
-## Task 7: CI — install OpenCV, run the model fetch before tests
+## Task 7: CI — install OpenCV + pybind11, run the model fetch before tests
+
+> **Note found while preparing this task:** CI's `cv-engine` job has never
+> installed pybind11 anywhere, and its Configure step runs plain `cmake -S
+> cv-engine -B cv-engine/build -GNinja` with no way for `find_package(pybind11
+> CONFIG REQUIRED)` to succeed — this is the exact same gap every local
+> implementer dispatch has been working around with an explicit
+> `-Dpybind11_DIR=...` flag. This predates this plan's LiteRT revision (it's
+> been true since the original scaffolding), so CI has likely never actually
+> passed the `cv-engine` job's Configure step. Fixing it is folded into Step
+> 1 below since it's the same job this task is already touching, and leaving
+> it would make every other task's work invisible to CI regardless of this
+> task's own changes.
 
 **Files:**
 - Modify: `.github/workflows/ci.yml`
 
 **Interfaces:** None — infra-only change.
 
-- [ ] **Step 1: Add OpenCV install to the `cv-engine` CI job**
+- [ ] **Step 1: Add OpenCV + pybind11 to the `cv-engine` CI job**
 
 In `.github/workflows/ci.yml`, update the `cv-engine` job's "Install build
-tools" step:
+tools" step and its "Configure" step:
 
 ```yaml
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build libopencv-dev
+      - name: Install pybind11
+        run: pip install --user pybind11
+      - name: Configure
+        run: |
+          cmake -S cv-engine -B cv-engine/build -GNinja \
+            -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
 ```
 
-(The model fetch itself needs no separate CI step — Task 1 wired it into the
-CMake `configure`/`build` step via `add_custom_target(fetch_models ALL ...)`,
-so `cmake --build cv-engine/build` in CI's existing "Build" step fetches
-automatically.)
+(`git` isn't listed — GitHub's `ubuntu-latest` runners ship it preinstalled,
+needed by Task 3's CMake `FetchContent` step for LiteRT. The model fetch
+itself needs no separate CI step either — Task 1 wired it into the CMake
+`configure`/`build` step via `add_custom_target(fetch_models ALL ...)`, so
+`cmake --build cv-engine/build` in CI's existing "Build" step fetches
+automatically. Budget real time for this job now — LiteRT's FetchContent
+build adds 10+ minutes the first time, same as it did locally in Task 3.)
 
 - [ ] **Step 2: Validate the workflow file**
 
@@ -1377,7 +1398,7 @@ reproducible locally without `act` or similar).
 
 ```bash
 git add .github/workflows/ci.yml
-git commit -m "ci: install OpenCV for the cv-engine build"
+git commit -m "ci: install OpenCV + pybind11 for the cv-engine build"
 ```
 
 ---
