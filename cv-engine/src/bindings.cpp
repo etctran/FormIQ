@@ -1,8 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <string>
 
 #include "extractor.h"
 #include "keypoints.h"
+#include "model_paths.h"
 
 namespace py = pybind11;
 
@@ -24,6 +26,8 @@ PYBIND11_MODULE(cv_engine, m) {
         .def_readwrite("landmarks", &formiq::Frame::landmarks);
 
     py::class_<formiq::KeypointExtractor>(m, "KeypointExtractor")
-        .def(py::init<>())
+        .def(py::init<std::string, std::string>(),
+             py::arg("detector_model_path") = formiq::kDefaultPoseDetectorModelPath,
+             py::arg("landmark_model_path") = formiq::kDefaultPoseLandmarkModelPath)
         .def("extract", &formiq::KeypointExtractor::Extract, py::arg("video_path"));
 }
