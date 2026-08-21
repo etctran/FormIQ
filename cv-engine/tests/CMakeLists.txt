@@ -11,3 +11,9 @@ target_link_libraries(test_pose_detector PRIVATE cv_engine_core ${OpenCV_LIBS})
 target_include_directories(test_pose_detector PRIVATE ${OpenCV_INCLUDE_DIRS})
 add_test(NAME test_pose_detector COMMAND test_pose_detector
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
+add_executable(test_landmark_regressor test_landmark_regressor.cpp)
+target_link_libraries(test_landmark_regressor PRIVATE cv_engine_core ${OpenCV_LIBS})
+target_include_directories(test_landmark_regressor PRIVATE ${OpenCV_INCLUDE_DIRS})
+add_test(NAME test_landmark_regressor COMMAND test_landmark_regressor
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

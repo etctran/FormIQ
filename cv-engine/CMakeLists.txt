@@ -30,6 +30,7 @@ add_library(cv_engine_core STATIC
   src/extractor.cpp
   src/roi_tracker.cpp
   src/pose_detector.cpp
+  src/landmark_regressor.cpp
 )
 target_include_directories(cv_engine_core PUBLIC include)
 target_link_libraries(cv_engine_core PUBLIC ${OpenCV_LIBS})
