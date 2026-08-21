@@ -29,11 +29,26 @@ add_custom_target(fetch_models ALL
 add_library(cv_engine_core STATIC
   src/extractor.cpp
   src/roi_tracker.cpp
+  src/pose_detector.cpp
 )
 target_include_directories(cv_engine_core PUBLIC include)
 target_link_libraries(cv_engine_core PUBLIC ${OpenCV_LIBS})
 target_include_directories(cv_engine_core PUBLIC ${OpenCV_INCLUDE_DIRS})
 add_dependencies(cv_engine_core fetch_models)
+
+include(FetchContent)
+FetchContent_Declare(
+  tensorflow
+  GIT_REPOSITORY https://github.com/tensorflow/tensorflow.git
+  GIT_TAG v2.21.0
+  GIT_SHALLOW TRUE
+  SOURCE_SUBDIR tensorflow/lite
+)
+set(TFLITE_ENABLE_XNNPACK OFF CACHE BOOL "" FORCE)
+set(TFLITE_ENABLE_GPU OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(tensorflow)
+
+target_link_libraries(cv_engine_core PUBLIC tensorflow-lite)
 
 pybind11_add_module(cv_engine src/bindings.cpp)
 target_link_libraries(cv_engine PRIVATE cv_engine_core)
