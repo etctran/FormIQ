@@ -1,3 +1,7 @@
 add_executable(test_extractor test_extractor.cpp)
 target_link_libraries(test_extractor PRIVATE cv_engine_core)
 add_test(NAME test_extractor COMMAND test_extractor)
+
+add_executable(test_roi_tracker test_roi_tracker.cpp)
+target_link_libraries(test_roi_tracker PRIVATE cv_engine_core)
+add_test(NAME test_roi_tracker COMMAND test_roi_tracker)
