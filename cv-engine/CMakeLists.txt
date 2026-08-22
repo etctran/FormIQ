@@ -12,11 +12,18 @@ endif()
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 # 4.6 is the floor shipped by Ubuntu 24.04's libopencv-dev (what CI uses).
-# The old 4.8 floor existed only for cv::dnn::readNetFromTFLite, which this
-# codebase no longer uses; the sole remaining cv::dnn call is NMSBoxes, which
-# long predates 4.6. imgcodecs is listed explicitly because the tests cv::imread
-# their fixtures.
-find_package(OpenCV 4.6 REQUIRED COMPONENTS core imgproc imgcodecs videoio dnn)
+# No version floor: this code has no version-specific OpenCV dependency
+# (the old 4.8 floor existed only for cv::dnn::readNetFromTFLite, which
+# this codebase no longer uses; the sole remaining cv::dnn call is
+# NMSBoxes, a long-stable API). A pinned floor like "4.6" actively breaks
+# on machines with only OpenCV 5.x installed, since CMake's OpenCV package
+# config treats a major-version bump as incompatible with an older
+# request rather than "newer, so fine" - confirmed locally (Homebrew's
+# opencv@4 4.14 vs. unversioned opencv 5.0 resolve to the same
+# find_package call differently across otherwise-identical environments).
+# imgcodecs is listed explicitly because the tests cv::imread their
+# fixtures.
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs videoio dnn)
 
 set(CV_ENGINE_MODELS_DIR "${CMAKE_SOURCE_DIR}/models")
 
