@@ -1,0 +1,13 @@
+/* frontend/src/components/ResultsView.css */
+.results__video {
+  width: 100%;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: black;
+}
+
+.results__reps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
