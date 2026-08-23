@@ -1,0 +1,43 @@
+/* frontend/src/components/RepCard.css */
+.rep-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.rep-card--active {
+  border-color: var(--accent-cyan);
+}
+
+.rep-card__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.rep-card__accuracy {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.rep-card__accuracy--warn {
+  color: var(--warn);
+}
+
+.rep-card__fault {
+  font-size: 11px;
+  background: var(--danger);
+  color: white;
+  border-radius: 20px;
+  padding: 2px 8px;
+}
