@@ -51,6 +51,60 @@ describe('App', () => {
     Object.defineProperty(video, 'duration', { configurable: true, value: 12 })
     fireEvent.loadedMetadata(video)
 
-    expect((await screen.findAllByText(/^Rep \d/)).length).toBeGreaterThan(0)
+    // Resolving proves the cards rendered; the real assertion is specific,
+    // known content. For a 12s mock video, mockReps.ts's getReps derives
+    // repCount = round(12 / 4) = 3 reps of 4s each, so rep index 0 gets
+    // MOCK_ACCURACIES[0] = 0.92 -> "92%". A generic "some Rep text
+    // exists" check can't fail independently of findAllByText itself;
+    // this proves the cards are actually data-driven from the mock.
+    await screen.findAllByText(/^Rep \d/)
+    expect(screen.getByText('92%')).toBeInTheDocument()
+  })
+
+  it('rejects a file with a disallowed extension and keeps submit disabled', () => {
+    render(<App />)
+
+    const file = new File(['fake video content'], 'clip.avi', { type: 'video/x-msvideo' })
+    const input = screen.getByLabelText(/drop a video/i)
+    fireEvent.change(input, { target: { files: [file] } })
+
+    expect(screen.getByText(/unsupported file type/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^analyze$/i })).toBeDisabled()
+  })
+
+  it('resets to a clean idle state after results, and supports a second upload→results cycle', async () => {
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(/Backend: online/)).toBeInTheDocument())
+
+    const runUploadToResults = async (filename: string) => {
+      const file = new File(['fake video content'], filename, { type: 'video/mp4' })
+      const input = screen.getByLabelText(/drop a video/i)
+      fireEvent.change(input, { target: { files: [file] } })
+      fireEvent.click(screen.getByRole('button', { name: /^analyze$/i }))
+
+      await screen.findByText(/Analyzing your squat set/i)
+
+      const video = await screen.findByTestId('results-video')
+      Object.defineProperty(video, 'duration', { configurable: true, value: 12 })
+      fireEvent.loadedMetadata(video)
+
+      await screen.findAllByText(/^Rep \d/)
+    }
+
+    await runUploadToResults('clip.mp4')
+
+    fireEvent.click(screen.getByRole('button', { name: /analyze another video/i }))
+
+    // Back to a genuinely clean idle state: the upload form is visible
+    // again, results are gone (proxy for ResultsView's unmount, which is
+    // where its object-URL cleanup effect runs), and the submit button is
+    // disabled again because no video is selected.
+    expect(screen.getByLabelText(/drop a video/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('results-video')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^analyze$/i })).toBeDisabled()
+
+    // A second full cycle works too.
+    await runUploadToResults('clip-2.mp4')
+    expect(screen.getByTestId('results-video')).toBeInTheDocument()
   })
 })

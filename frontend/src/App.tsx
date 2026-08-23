@@ -34,7 +34,17 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
       setStatus('idle')
+      setResult(null)
+      setVideo(null)
     }
+  }
+
+  const handleReset = () => {
+    setStatus('idle')
+    setResult(null)
+    setVideo(null)
+    setExercise(null)
+    setError(null)
   }
 
   return (
@@ -46,7 +56,9 @@ function App() {
 
       {status === 'idle' && <UploadForm onSubmit={handleSubmit} />}
       {status === 'analyzing' && exercise && <AnalyzingView exercise={exercise} />}
-      {status === 'results' && result && video && <ResultsView response={result} video={video} />}
+      {status === 'results' && result && video && (
+        <ResultsView response={result} video={video} onReset={handleReset} />
+      )}
 
       {error && <p className="error">{error}</p>}
     </main>

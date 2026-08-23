@@ -8,9 +8,10 @@ import './ResultsView.css'
 interface ResultsViewProps {
   response: AnalysisResponse
   video: File
+  onReset: () => void
 }
 
-export function ResultsView({ response, video }: ResultsViewProps) {
+export function ResultsView({ response, video, onReset }: ResultsViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [durationSec, setDurationSec] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -60,7 +61,18 @@ export function ResultsView({ response, video }: ResultsViewProps) {
     return () => URL.revokeObjectURL(videoUrl)
   }, [videoUrl])
 
-  const reps = useMemo(() => getReps(response, durationSec), [response, durationSec])
+  // If real video metadata never loads (playback error), fall back to an
+  // estimated duration derived from frame_count at the project's standard
+  // 30fps sampling rate, so getReps still has something to lay reps out
+  // against instead of silently rendering nothing.
+  const fallbackDurationSec = response.frame_count > 0 ? response.frame_count / 30 : 0
+  const effectiveDurationSec =
+    durationSec > 0 ? durationSec : playbackError ? fallbackDurationSec : 0
+
+  const reps = useMemo(
+    () => getReps(response, effectiveDurationSec),
+    [response, effectiveDurationSec],
+  )
 
   const handleSeek = (seconds: number) => {
     if (videoRef.current) {
@@ -77,19 +89,33 @@ export function ResultsView({ response, video }: ResultsViewProps) {
         controls
         data-testid="results-video"
         className="results__video"
-        onLoadedMetadata={(event) => setDurationSec(event.currentTarget.duration)}
+        onLoadedMetadata={(event) => {
+          const value = event.currentTarget.duration
+          setDurationSec(Number.isFinite(value) ? value : 0)
+        }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
         onError={() => setPlaybackError(true)}
       />
       {playbackError && (
         <p className="error">
-          This browser can't play this video for preview — your results below are still valid.
+          {reps.length > 0
+            ? "This browser can't play this video for preview — your results below are still valid."
+            : "This browser can't play this video for preview."}
         </p>
       )}
 
+      <button type="button" className="results__reset" onClick={onReset}>
+        Analyze another video
+      </button>
+
       {reps.length > 0 && (
         <>
-          <Timeline reps={reps} durationSec={durationSec} currentTime={currentTime} onSeek={handleSeek} />
+          <Timeline
+            reps={reps}
+            durationSec={effectiveDurationSec}
+            currentTime={currentTime}
+            onSeek={handleSeek}
+          />
           <div className="results__reps">
             {reps.map((rep) => (
               <RepCard

@@ -1,13 +1,17 @@
 /* frontend/src/components/Timeline.css */
 .timeline {
-  display: flex;
+  position: relative;
   height: 20px;
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 16px;
+  background: var(--bg-raised);
 }
 
 .timeline-segment {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   border: none;
   cursor: pointer;
   padding: 0;

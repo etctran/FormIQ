@@ -11,3 +11,21 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+
+.results__reset {
+  display: inline-block;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.results__reset:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
