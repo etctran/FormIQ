@@ -1,0 +1,27 @@
+/* frontend/src/components/Timeline.css */
+.timeline {
+  display: flex;
+  height: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.timeline-segment {
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.timeline-segment--good {
+  background: var(--good);
+}
+
+.timeline-segment--fault {
+  background: var(--warn);
+}
+
+.timeline-segment--active {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -2px;
+}
