@@ -21,3 +21,6 @@ __pycache__/
 
 # Git worktrees (dev workflow scratch space)
 .worktrees/
+
+# Superpowers scratch (brainstorm mockups, SDD workspaces)
+.superpowers/
