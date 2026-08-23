@@ -1,0 +1,72 @@
+/* frontend/src/components/UploadForm.css */
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.upload-form__label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.upload-form__pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.upload-form__pill {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: none;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.upload-form__pill--active {
+  background: var(--accent-cyan);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.upload-form__dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 36px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  display: block;
+}
+
+.upload-form__dropzone input {
+  display: none;
+}
+
+.upload-form__submit {
+  background: var(--accent-gradient);
+  color: var(--bg);
+  font-weight: 700;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.upload-form__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
