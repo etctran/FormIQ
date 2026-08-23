@@ -16,10 +16,12 @@ export function ResultsView({ response, video }: ResultsViewProps) {
   const [currentTime, setCurrentTime] = useState(0)
   const [playbackError, setPlaybackError] = useState(false)
 
-  const videoUrl = useMemo(() => URL.createObjectURL(video), [video])
+  const [videoUrl, setVideoUrl] = useState('')
   useEffect(() => {
-    return () => URL.revokeObjectURL(videoUrl)
-  }, [videoUrl])
+    const url = URL.createObjectURL(video)
+    setVideoUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [video])
 
   const reps = useMemo(() => getReps(response, durationSec), [response, durationSec])
 
@@ -34,7 +36,7 @@ export function ResultsView({ response, video }: ResultsViewProps) {
     <div className="results">
       <video
         ref={videoRef}
-        src={videoUrl}
+        src={videoUrl || undefined}
         controls
         data-testid="results-video"
         className="results__video"
