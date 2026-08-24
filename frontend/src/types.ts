@@ -19,8 +19,21 @@ export interface RepScore {
   faults: string[]
 }
 
+export interface Keypoint {
+  x: number
+  y: number
+  z: number
+  visibility: number
+}
+
+export interface Frame {
+  timestamp_sec: number
+  landmarks: Keypoint[]
+}
+
 export interface AnalysisResponse {
   exercise: Exercise
   frame_count: number
   reps: RepScore[]
+  frames: Frame[]
 }

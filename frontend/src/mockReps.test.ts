@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getReps } from './mockReps'
 import type { AnalysisResponse } from './types'
 
-const baseResponse: AnalysisResponse = { exercise: 'squat', frame_count: 100, reps: [] }
+const baseResponse: AnalysisResponse = { exercise: 'squat', frame_count: 100, reps: [], frames: [] }
 
 describe('getReps', () => {
   it('returns real reps unchanged when present', () => {
