@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
-const mockAnalysisResponse = { exercise: 'squat', frame_count: 100, reps: [] }
+const mockAnalysisResponse = { exercise: 'squat', frame_count: 100, reps: [], frames: [] }
 
 beforeEach(() => {
   vi.stubGlobal(

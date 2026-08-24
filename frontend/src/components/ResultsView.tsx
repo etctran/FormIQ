@@ -3,6 +3,7 @@ import type { AnalysisResponse } from '../types'
 import { getReps } from '../mockReps'
 import { Timeline } from './Timeline'
 import { RepCard } from './RepCard'
+import { SkeletonOverlay } from './SkeletonOverlay'
 import './ResultsView.css'
 
 interface ResultsViewProps {
@@ -83,19 +84,22 @@ export function ResultsView({ response, video, onReset }: ResultsViewProps) {
 
   return (
     <div className="results">
-      <video
-        ref={videoRef}
-        src={videoUrl || undefined}
-        controls
-        data-testid="results-video"
-        className="results__video"
-        onLoadedMetadata={(event) => {
-          const value = event.currentTarget.duration
-          setDurationSec(Number.isFinite(value) ? value : 0)
-        }}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onError={() => setPlaybackError(true)}
-      />
+      <div className="results__video-wrap">
+        <video
+          ref={videoRef}
+          src={videoUrl || undefined}
+          controls
+          data-testid="results-video"
+          className="results__video"
+          onLoadedMetadata={(event) => {
+            const value = event.currentTarget.duration
+            setDurationSec(Number.isFinite(value) ? value : 0)
+          }}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onError={() => setPlaybackError(true)}
+        />
+        <SkeletonOverlay frames={response.frames} videoRef={videoRef} />
+      </div>
       {playbackError && (
         <p className="error">
           {reps.length > 0

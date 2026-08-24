@@ -6,6 +6,15 @@
   background: black;
 }
 
+.results__video-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.results__video-wrap .results__video {
+  margin-bottom: 0;
+}
+
 .results__reps {
   display: flex;
   gap: 8px;
