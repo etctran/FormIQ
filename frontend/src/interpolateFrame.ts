@@ -8,7 +8,7 @@ import type { Frame, Keypoint } from './types'
 // has no detection (empty landmarks) -- never fabricates a pose the
 // model didn't actually produce (spec Key Decision 5).
 export function interpolateFrame(frames: Frame[], currentTime: number): Keypoint[] | null {
-  if (frames.length === 0) return null
+  if (!frames || frames.length === 0) return null
   if (currentTime < frames[0].timestamp_sec) return null
   if (currentTime >= frames[frames.length - 1].timestamp_sec) return null
 
@@ -26,6 +26,7 @@ export function interpolateFrame(frames: Frame[], currentTime: number): Keypoint
   const b = frames[lo + 1]
 
   if (a.landmarks.length === 0 || b.landmarks.length === 0) return null
+  if (a.landmarks.length !== b.landmarks.length) return null
 
   const span = b.timestamp_sec - a.timestamp_sec
   const t = span > 0 ? (currentTime - a.timestamp_sec) / span : 0
