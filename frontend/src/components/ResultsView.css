@@ -1,5 +1,6 @@
 /* frontend/src/components/ResultsView.css */
 .results__video {
+  display: block;
   width: 100%;
   border-radius: 8px;
   margin-bottom: 16px;
