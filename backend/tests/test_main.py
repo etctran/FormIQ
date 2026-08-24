@@ -22,6 +22,7 @@ def test_analyze_stub_returns_empty_reps() -> None:
     assert body["exercise"] == "squat"
     assert body["reps"] == []
     assert body["frame_count"] == 0
+    assert body["frames"] == []
 
 
 def test_analyze_rejects_unknown_exercise() -> None:

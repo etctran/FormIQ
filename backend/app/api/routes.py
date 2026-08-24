@@ -22,4 +22,6 @@ async def analyze(exercise: Exercise, video: UploadFile) -> AnalysisResponse:
         tmp.flush()
         frames = cv_engine.KeypointExtractor().extract(tmp.name)
 
-    return AnalysisResponse(exercise=exercise, frame_count=len(frames), reps=[])
+    return AnalysisResponse(
+        exercise=exercise, frame_count=len(frames), reps=[], frames=frames
+    )

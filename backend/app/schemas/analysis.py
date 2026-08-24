@@ -2,6 +2,8 @@ from enum import Enum
 
 from pydantic import BaseModel
 
+from app.schemas.keypoint import Frame
+
 
 class Exercise(str, Enum):
     SQUAT = "squat"
@@ -26,3 +28,4 @@ class AnalysisResponse(BaseModel):
     exercise: Exercise
     frame_count: int
     reps: list[RepScore]
+    frames: list[Frame]
