@@ -204,10 +204,16 @@ tunable later — not derived from a labeled dataset (see Non-goals).
 - **Faults**:
   | name | phases | check | penalty |
   |---|---|---|---|
-  | `insufficient_depth` | PEAK | hip does not drop to/below knee height (normalized by thigh length) | 0.20 |
-  | `knee_valgus` | DRIVE, PEAK | knee's horizontal deviation inward past the hip–ankle line exceeds threshold (normalized by thigh length) | 0.15 |
+  | `insufficient_depth` | PEAK | knee angle (the primary signal itself) fails to drop below a depth threshold | 0.20 |
+  | `forward_knee_travel` | DRIVE, PEAK | knee's horizontal position extends past the foot-index landmark beyond threshold (normalized by shin length) | 0.15 |
   | `back_rounding` | DRIVE, PEAK | `angle(shoulder, hip, knee)` drops below threshold (torso collapsing forward) | 0.15 |
   | `heel_rise` | PEAK | heel landmark (29/30) lifts above ankle height beyond threshold (normalized by foot length) | 0.10 |
+
+  > `forward_knee_travel` replaces an earlier `knee_valgus` fault from
+  > brainstorming: knee cave-in is a frontal-plane deviation, essentially
+  > unobservable from the side-view angle this exercise assumes (the far
+  > knee is partially occluded). Forward knee travel is visible in the
+  > sagittal plane, so it fits the fixed camera angle.
 
 ### deadlift (side view)
 - **Signal**: `angle(shoulder, hip, knee)` (hip hinge angle). Rest ≈
@@ -217,7 +223,7 @@ tunable later — not derived from a labeled dataset (see Non-goals).
   |---|---|---|---|
   | `back_rounding` | DRIVE, PEAK | spinal curvature proxy (deviation of the shoulder–hip–knee line from straight) exceeds threshold | 0.20 |
   | `bar_path_drift` | DRIVE, RECOVER | wrist midpoint's horizontal drift from a vertical line through the hip exceeds threshold (normalized by torso length) | 0.15 |
-  | `hyperextension_lockout` | REST, RECOVER (near top) | `angle(shoulder, hip, knee)` exceeds a max (leaning back past neutral at lockout) | 0.10 |
+  | `hyperextension_lockout` | REST, RECOVER (near top) | wrist midpoint's horizontal drift from the hip exceeds threshold (leaning back past neutral at lockout; uses wrist rather than shoulder as the lean proxy, since shoulder position is already the signal driving segmentation here) | 0.10 |
 
 ### bench_press (front view)
 - **Signal**: `angle(shoulder, elbow, wrist)` (elbow angle). Rest = arms
@@ -270,7 +276,7 @@ tunable later — not derived from a labeled dataset (see Non-goals).
 - **Faults**:
   | name | phases | check | penalty |
   |---|---|---|---|
-  | `incomplete_rom_top` | PEAK | elbow angle doesn't drop below threshold, or nose landmark doesn't rise above wrist height | 0.20 |
+  | `incomplete_rom_top` | PEAK | elbow angle (the primary signal itself) fails to drop below threshold | 0.20 |
   | `kipping_swing` | DRIVE, PEAK | hip's horizontal displacement relative to shoulder exceeds threshold (normalized by torso length) | 0.15 |
   | `incomplete_lockout_bottom` | REST (entry) | elbow angle fails to reach near-full-extension at the bottom | 0.10 |
 
@@ -280,7 +286,7 @@ tunable later — not derived from a labeled dataset (see Non-goals).
 - **Faults**:
   | name | phases | check | penalty |
   |---|---|---|---|
-  | `insufficient_pull` | PEAK | wrist-to-torso horizontal distance doesn't close below threshold (normalized by torso length) | 0.20 |
+  | `insufficient_pull` | PEAK | elbow angle (the primary signal itself) fails to drop below threshold | 0.20 |
   | `back_rounding` | DRIVE, PEAK | `angle(shoulder, hip, knee)` drops below threshold | 0.15 |
   | `torso_swing` | DRIVE, PEAK | shoulder's horizontal displacement relative to hip exceeds threshold (using momentum to pull) | 0.10 |
 
