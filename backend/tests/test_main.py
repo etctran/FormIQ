@@ -75,3 +75,35 @@ def test_analyze_real_video_converts_frames() -> None:
             assert isinstance(landmark.y, float)
             assert isinstance(landmark.z, float)
             assert isinstance(landmark.visibility, float)
+
+
+def test_analyze_auto_logs_history_entry() -> None:
+    video_bytes = b"not a real video, scaffolding stub"
+    response = client.post(
+        "/analyze/squat",
+        files={"video": ("clip.mp4", video_bytes, "video/mp4")},
+    )
+    assert response.status_code == 200
+
+    history_response = client.get("/history")
+    assert history_response.status_code == 200
+    entries = history_response.json()
+    assert any(e["exercise"] == "squat" and e["source"] == "video" for e in entries)
+
+
+def test_analyze_still_succeeds_if_history_logging_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api import routes as routes_module
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(routes_module.service, "log_video_entry", _raise)
+
+    response = client.post(
+        "/analyze/squat",
+        files={"video": ("clip.mp4", b"not a real video", "video/mp4")},
+    )
+    assert response.status_code == 200
+    assert response.json()["exercise"] == "squat"
