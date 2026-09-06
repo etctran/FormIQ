@@ -1,6 +1,6 @@
 # Workout history / exercise tracking over time
 
-Status: Draft for review
+Status: Implemented
 Date: 2026-09-05
 
 ## Goal
