@@ -4,9 +4,10 @@ import type { AnalysisResponse, Exercise } from './types'
 import { UploadForm } from './components/UploadForm'
 import { AnalyzingView } from './components/AnalyzingView'
 import { ResultsView } from './components/ResultsView'
+import { HistoryView } from './components/HistoryView'
 import './App.css'
 
-type Status = 'idle' | 'analyzing' | 'results'
+type Status = 'idle' | 'analyzing' | 'results' | 'history'
 
 function App() {
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null)
@@ -50,6 +51,22 @@ function App() {
   return (
     <main className="app">
       <h1>FormIQ</h1>
+      <nav className="app__nav">
+        <button
+          type="button"
+          className={`app__nav-link ${status !== 'history' ? 'app__nav-link--active' : ''}`.trim()}
+          onClick={handleReset}
+        >
+          New Analysis
+        </button>
+        <button
+          type="button"
+          className={`app__nav-link ${status === 'history' ? 'app__nav-link--active' : ''}`.trim()}
+          onClick={() => setStatus('history')}
+        >
+          History
+        </button>
+      </nav>
       <p className="status">
         Backend: {backendHealthy === null ? 'checking…' : backendHealthy ? 'online' : 'offline'}
       </p>
@@ -59,6 +76,7 @@ function App() {
       {status === 'results' && result && video && (
         <ResultsView response={result} video={video} onReset={handleReset} />
       )}
+      {status === 'history' && <HistoryView />}
 
       {error && <p className="error">{error}</p>}
     </main>

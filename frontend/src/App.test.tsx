@@ -107,4 +107,25 @@ describe('App', () => {
     await runUploadToResults('clip-2.mp4')
     expect(screen.getByTestId('results-video')).toBeInTheDocument()
   })
+
+  it('switches to the History view and back to idle via the nav', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.includes('/history')) {
+          return Promise.resolve({ ok: true, json: async () => [] })
+        }
+        return Promise.resolve({ ok: true, json: async () => mockAnalysisResponse })
+      }),
+    )
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(/Backend: online/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+    await screen.findByText(/no workouts logged yet/i)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Analysis' }))
+    expect(screen.getByLabelText(/drop a video/i)).toBeInTheDocument()
+  })
 })
