@@ -1,9 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.history import router as history_router
 from app.api.routes import router
+from app.history.database import init_db
 
-app = FastAPI(title="FormIQ API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="FormIQ API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,3 +24,4 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(history_router)
