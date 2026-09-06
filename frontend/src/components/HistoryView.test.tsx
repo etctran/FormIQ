@@ -33,6 +33,19 @@ const videoEntry: HistoryEntry = {
   rep_scores: [],
 }
 
+const manualEntryWithNotes: HistoryEntry = {
+  ...manualEntry,
+  id: 3,
+  notes: 'felt strong today',
+}
+
+const zeroRepVideoEntry: HistoryEntry = {
+  ...videoEntry,
+  id: 4,
+  rep_count: 0,
+  avg_form_accuracy: null,
+}
+
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
@@ -46,6 +59,33 @@ describe('HistoryView', () => {
 
     await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
     expect(screen.getByText('5 reps · 85% avg form')).toBeInTheDocument()
+  })
+
+  it('renders notes for a manual entry that has them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [manualEntryWithNotes] }),
+    )
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText(/3 × 8 @ 100/)).toBeInTheDocument())
+    expect(screen.getByText(/felt strong today/)).toBeInTheDocument()
+  })
+
+  it('does not render a dangling separator for a manual entry without notes', async () => {
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument()
+  })
+
+  it('describes a zero-rep video entry as scoring-not-yet-available rather than a detection failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [zeroRepVideoEntry] }),
+    )
+    render(<HistoryView />)
+    await waitFor(() =>
+      expect(screen.getByText(/rep scoring not yet available/i)).toBeInTheDocument(),
+    )
   })
 
   it('shows an empty message when there are no entries', async () => {

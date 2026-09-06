@@ -10,7 +10,7 @@ function formatEntry(entry: HistoryEntry): string {
     return entry.weight != null ? `${setsReps} @ ${entry.weight}` : setsReps
   }
   if (entry.rep_count === null || entry.rep_count === 0) {
-    return 'no reps detected'
+    return 'rep scoring not yet available'
   }
   const accuracy =
     entry.avg_form_accuracy != null ? `${Math.round(entry.avg_form_accuracy * 100)}%` : null
@@ -32,6 +32,7 @@ export function HistoryView() {
   }, [refetch])
 
   const handleDelete = async (id: number) => {
+    setError(null)
     try {
       await deleteHistoryEntry(id)
       setEntries((prev) => (prev ? prev.filter((entry) => entry.id !== id) : prev))
@@ -41,6 +42,7 @@ export function HistoryView() {
   }
 
   const handleCreated = (entry: HistoryEntry) => {
+    setError(null)
     setEntries((prev) => (prev ? [entry, ...prev] : [entry]))
   }
 
@@ -59,7 +61,10 @@ export function HistoryView() {
             <li key={entry.id} className="history-view__row">
               <span className="history-view__date">{entry.date}</span>
               <span className="history-view__exercise">{entry.exercise.replace('_', ' ')}</span>
-              <span className="history-view__detail">{formatEntry(entry)}</span>
+              <span className="history-view__detail">
+                {formatEntry(entry)}
+                {entry.source === 'manual' && entry.notes && ` — ${entry.notes}`}
+              </span>
               <span className="history-view__source">{entry.source}</span>
               <button
                 type="button"
