@@ -22,7 +22,7 @@ class WorkoutEntry(Base):
     exercise: Mapped[str] = mapped_column(String, nullable=False)
     date: Mapped[date_type] = mapped_column(Date, nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # manual entries only
     sets: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy.orm import sessionmaker
 
@@ -19,7 +19,7 @@ def test_manual_entry_round_trip(tmp_path) -> None:
             exercise="squat",
             date=date(2026, 9, 1),
             source="manual",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             sets=3,
             reps=8,
             weight=100.0,
@@ -51,7 +51,7 @@ def test_video_entry_round_trip(tmp_path) -> None:
             exercise="pushup",
             date=date(2026, 9, 2),
             source="video",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             rep_count=5,
             avg_form_accuracy=0.85,
             rep_scores=[

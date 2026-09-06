@@ -1,4 +1,6 @@
-from datetime import date as date_, datetime as datetime_
+from datetime import UTC
+from datetime import date as date_
+from datetime import datetime as datetime_
 
 import pytest
 from pydantic import ValidationError
@@ -46,7 +48,7 @@ def test_history_entry_converts_from_orm_attributes() -> None:
         exercise="squat",
         date=date_(2026, 9, 1),
         source="manual",
-        created_at=datetime_(2026, 9, 1, 12, 0, 0),
+        created_at=datetime_(2026, 9, 1, 12, 0, 0, tzinfo=UTC),
         sets=3,
         reps=8,
         weight=100.0,

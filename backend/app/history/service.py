@@ -6,7 +6,7 @@ auto-log side effect.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ def create_entry(session: Session, data: ManualEntryCreate) -> WorkoutEntry:
         exercise=data.exercise.value,
         date=data.date,
         source="manual",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         sets=data.sets,
         reps=data.reps,
         weight=data.weight,
@@ -56,9 +56,9 @@ def log_video_entry(
     )
     entry = WorkoutEntry(
         exercise=exercise.value,
-        date=date.today(),
+        date=datetime.now(UTC).date(),
         source="video",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         rep_count=rep_count,
         avg_form_accuracy=avg_form_accuracy,
         rep_scores=[rep.model_dump(mode="json") for rep in response.reps],
