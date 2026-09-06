@@ -101,7 +101,9 @@ def inverted_angle_metric(a: PointRef, vertex: PointRef, c: PointRef) -> Metric:
     return metric
 
 
-def horizontal_offset_metric(point: PointRef, reference: PointRef, normalize: tuple[PointRef, PointRef]) -> Metric:
+def horizontal_offset_metric(
+    point: PointRef, reference: PointRef, normalize: tuple[PointRef, PointRef]
+) -> Metric:
     """abs(point.x - reference.x) / distance(*normalize). Each of
     point/reference/normalize's two ends may be a single landmark index
     or an (L, R) pair."""
@@ -119,7 +121,9 @@ def horizontal_offset_metric(point: PointRef, reference: PointRef, normalize: tu
     return metric
 
 
-def vertical_offset_metric(point: PointRef, reference: PointRef, normalize: tuple[PointRef, PointRef]) -> Metric:
+def vertical_offset_metric(
+    point: PointRef, reference: PointRef, normalize: tuple[PointRef, PointRef]
+) -> Metric:
     """(point.y - reference.y) / distance(*normalize) — signed, so
     direction (e.g. "lifted above" vs "below") is preserved."""
 
