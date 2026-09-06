@@ -1,0 +1,37 @@
+.manual-entry-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.manual-entry-form__label {
+  flex-basis: 100%;
+  font-weight: 600;
+  color: var(--text-h);
+  margin-bottom: 4px;
+}
+
+.manual-entry-form input,
+.manual-entry-form select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.manual-entry-form__submit {
+  background: var(--accent-gradient);
+  border: none;
+  border-radius: 6px;
+  color: var(--bg);
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+}
