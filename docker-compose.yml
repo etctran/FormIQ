@@ -5,6 +5,8 @@ services:
       dockerfile: infra/docker/backend.Dockerfile
     ports:
       - "8000:8000"
+    volumes:
+      - backend_data:/app/data
 
   frontend:
     build:
@@ -14,3 +16,6 @@ services:
       - "5173:80"
     depends_on:
       - backend
+
+volumes:
+  backend_data:
