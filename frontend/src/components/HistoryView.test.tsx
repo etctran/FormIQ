@@ -68,4 +68,20 @@ describe('HistoryView', () => {
 
     await waitFor(() => expect(screen.queryByText('3 × 8 @ 100')).not.toBeInTheDocument())
   })
+
+  it('shows an error and keeps the row when deleting an entry fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [manualEntry, videoEntry] })
+      .mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Internal Server Error' })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('Delete entry from 2026-09-01'))
+
+    await waitFor(() => expect(screen.getByText(/failed to delete entry/i)).toBeInTheDocument())
+    expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument()
+  })
 })

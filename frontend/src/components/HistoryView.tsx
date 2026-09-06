@@ -32,8 +32,12 @@ export function HistoryView() {
   }, [refetch])
 
   const handleDelete = async (id: number) => {
-    await deleteHistoryEntry(id)
-    setEntries((prev) => (prev ? prev.filter((entry) => entry.id !== id) : prev))
+    try {
+      await deleteHistoryEntry(id)
+      setEntries((prev) => (prev ? prev.filter((entry) => entry.id !== id) : prev))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete entry')
+    }
   }
 
   const handleCreated = (entry: HistoryEntry) => {
