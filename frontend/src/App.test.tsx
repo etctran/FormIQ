@@ -108,6 +108,48 @@ describe('App', () => {
     expect(screen.getByTestId('results-video')).toBeInTheDocument()
   })
 
+  it('does not yank the user back to results if they navigate to History while an analysis is in flight', async () => {
+    let resolveAnalyze: (value: { ok: true; json: () => Promise<typeof mockAnalysisResponse> }) => void
+    const analyzePromise = new Promise<{ ok: true; json: () => Promise<typeof mockAnalysisResponse> }>(
+      (resolve) => {
+        resolveAnalyze = resolve
+      },
+    )
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (typeof url === 'string' && url.includes('/analyze/')) {
+          return analyzePromise
+        }
+        if (typeof url === 'string' && url.includes('/history')) {
+          return Promise.resolve({ ok: true, json: async () => [] })
+        }
+        return Promise.resolve({ ok: true, json: async () => true })
+      }),
+    )
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(/Backend: online/)).toBeInTheDocument())
+
+    const file = new File(['fake video content'], 'clip.mp4', { type: 'video/mp4' })
+    const input = screen.getByLabelText(/drop a video/i)
+    fireEvent.change(input, { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('button', { name: /^analyze$/i }))
+
+    await screen.findByText(/Analyzing your squat set/i)
+
+    // Navigate away to History while the analysis request is still pending.
+    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+    await screen.findByText(/no workouts logged yet/i)
+
+    // Now let the in-flight analysis resolve. It must not silently pull
+    // the user back to the results view.
+    resolveAnalyze!({ ok: true, json: async () => mockAnalysisResponse })
+    await waitFor(() => expect(screen.getByText(/no workouts logged yet/i)).toBeInTheDocument())
+    expect(screen.queryByTestId('results-video')).not.toBeInTheDocument()
+  })
+
   it('switches to the History view and back to idle via the nav', async () => {
     vi.stubGlobal(
       'fetch',

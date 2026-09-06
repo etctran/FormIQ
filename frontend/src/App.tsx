@@ -31,7 +31,10 @@ function App() {
     try {
       const response = await analyzeVideo(selectedExercise, selectedVideo)
       setResult(response)
-      setStatus('results')
+      // Only transition to results if the user is still in the
+      // 'analyzing' state — they may have since navigated to History
+      // while this request was in flight, and that navigation must win.
+      setStatus((current) => (current === 'analyzing' ? 'results' : current))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
       setStatus('idle')
