@@ -30,18 +30,34 @@ Docker, built/released with GitHub Actions.
   directly. `/analyze/{exercise}` returns real `frame_count` from the
   pipeline above; `reps` is still always `[]` — rep-segmentation and
   per-exercise form-accuracy scoring is not built yet (separate,
-  not-yet-started sub-project).
+  not-yet-started sub-project). `backend/app/history/` (SQLite via
+  SQLAlchemy — model, Pydantic schemas, service layer) plus the
+  `/history` router give the app a durable, single-user workout log: every
+  `/analyze` call auto-logs a `source="video"` entry (best-effort — a
+  logging failure never turns a successful analysis into an error
+  response) alongside `source="manual"` entries logged directly (sets,
+  reps, weight, no video). DB file at `backend/data/formiq.db`
+  (gitignored; `docker-compose.yml` mounts it as a named volume). See
+  `docs/superpowers/specs/2026-09-05-workout-history-tracking-design.md`.
 - `frontend/` — React + TypeScript, consumes the FastAPI backend. Real
   upload → results UI (not the raw-JSON scaffold): `UploadForm` →
   `AnalyzingView` → `ResultsView` (real client-side video playback via
-  `URL.createObjectURL`, color-coded rep timeline, per-rep cards).
+  `URL.createObjectURL`, color-coded rep timeline, per-rep cards). A
+  `'history'` state alongside `idle`/`analyzing`/`results` in `App.tsx`
+  (no router) reaches `HistoryView` (list + delete) and `ManualEntryForm`
+  (log a workout without a video).
   `frontend/src/mockReps.ts` is a deliberate, isolated mock-data fallback —
   `getReps()` returns the backend's real `reps` when non-empty, otherwise
   deterministic mock reps seeded from the video's real duration, so the UI
   could be built and reviewed against the real `RepScore` shape ahead of
   backend scoring existing. No other file branches on real-vs-mock; delete
   `mockReps.ts`/`mockReps.test.ts` and swap the one call site in
-  `ResultsView.tsx` for `response.reps` once backend scoring ships.
+  `ResultsView.tsx` for `response.reps` once backend scoring ships. Note:
+  `HistoryView` reads the real (always-empty) `reps` directly, so until
+  that scoring work ships, the same analyzed video shows fabricated reps
+  in `ResultsView` but "rep scoring not yet available" in History — a
+  visible seam, not a bug, that closes automatically once `mockReps.ts` is
+  deleted.
 - `infra/` — Dockerfiles, ECS task defs, GitHub Actions workflows. AWS
   ECS/Terraform/CI-CD deployment was fully designed (backend-only scope,
   Terraform applied manually, GitHub OIDC, Fargate w/ public IP, no ALB)
@@ -77,10 +93,16 @@ Docker, built/released with GitHub Actions.
 - Don't touch `infra/` GitHub Actions secrets or AWS credentials directly.
 ## Current focus
 Scaffolding phase is done — cv-engine's real pose extraction and the
-frontend's real upload/results UI are both built and merged. Two
+frontend's real upload/results UI are both built and merged. Workout
+history tracking (`backend/app/history/`, `HistoryView`/`ManualEntryForm`)
+is also built and merged — see `backend/` and `frontend/` above. Two
 sub-projects remain, neither started:
 - Backend rep-segmentation + per-exercise form-accuracy scoring (why
   `reps` is still always `[]`, and why `frontend/src/mockReps.ts` exists).
 - AWS ECS deployment (design approved in conversation, never written down
-  — needs its own spec pass before implementation).
+  — needs its own spec pass before implementation). Note this now has a
+  new hard requirement it didn't have before: `backend/data/formiq.db`
+  needs durable storage across task recycles (Fargate's local disk is
+  ephemeral) — an EFS mount or a managed DB, plus access control on the
+  unauthenticated `DELETE /history/{id}`.
  
