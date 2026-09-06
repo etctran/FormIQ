@@ -1,0 +1,71 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { HistoryView } from './HistoryView'
+import type { HistoryEntry } from '../types'
+
+const manualEntry: HistoryEntry = {
+  id: 1,
+  exercise: 'squat',
+  date: '2026-09-01',
+  source: 'manual',
+  created_at: '2026-09-01T12:00:00Z',
+  sets: 3,
+  reps: 8,
+  weight: 100,
+  notes: null,
+  rep_count: null,
+  avg_form_accuracy: null,
+  rep_scores: null,
+}
+
+const videoEntry: HistoryEntry = {
+  id: 2,
+  exercise: 'pushup',
+  date: '2026-09-02',
+  source: 'video',
+  created_at: '2026-09-02T12:00:00Z',
+  sets: null,
+  reps: null,
+  weight: null,
+  notes: null,
+  rep_count: 5,
+  avg_form_accuracy: 0.85,
+  rep_scores: [],
+}
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ ok: true, json: async () => [manualEntry, videoEntry] }),
+  )
+})
+
+describe('HistoryView', () => {
+  it('renders fetched manual and video entries with formatted detail', async () => {
+    render(<HistoryView />)
+
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+    expect(screen.getByText('5 reps · 85% avg form')).toBeInTheDocument()
+  })
+
+  it('shows an empty message when there are no entries', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }))
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText(/no workouts logged yet/i)).toBeInTheDocument())
+  })
+
+  it('removes an entry from the list when its delete button is clicked', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [manualEntry, videoEntry] })
+      .mockResolvedValueOnce({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('Delete entry from 2026-09-01'))
+
+    await waitFor(() => expect(screen.queryByText('3 × 8 @ 100')).not.toBeInTheDocument())
+  })
+})
