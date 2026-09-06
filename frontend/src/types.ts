@@ -37,3 +37,27 @@ export interface AnalysisResponse {
   reps: RepScore[]
   frames: Frame[]
 }
+
+export interface HistoryEntry {
+  id: number
+  exercise: Exercise
+  date: string
+  source: 'manual' | 'video'
+  created_at: string
+  sets: number | null
+  reps: number | null
+  weight: number | null
+  notes: string | null
+  rep_count: number | null
+  avg_form_accuracy: number | null
+  rep_scores: RepScore[] | null
+}
+
+export interface ManualEntryCreate {
+  exercise: Exercise
+  date: string
+  sets: number
+  reps: number
+  weight?: number | null
+  notes?: string | null
+}
