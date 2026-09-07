@@ -64,21 +64,22 @@ def test_clean_deadlift_two_reps_no_faults() -> None:
 
 
 def test_back_rounding_fires_when_nose_collapses_relative_to_shoulder() -> None:
-    angles = repeat_trajectory(
-        linspace_rep(170.0, 80.0, FRAMES_DOWN, FRAMES_UP), 1, rest_value=170.0, rest_frames=REST_FRAMES
-    )
-    hip_l, knee_l = neutral_xy(L_HIP), neutral_xy(L_KNEE)
-    active = set(active_frame_offsets(1, FRAMES_DOWN, FRAMES_UP, REST_FRAMES)[0])
-    overrides_sequence = []
-    for local_i, angle in enumerate(angles):
-        shoulder_l = point_at_angle(hip_l, knee_l, angle, length=300.0)
-        shoulder_r = shoulder_l  # symmetric enough for this test
-        overrides = {L_SHOULDER: kp(*shoulder_l), R_SHOULDER: kp(*shoulder_r)}
-        if local_i in active:
-            nose = point_at_angle(shoulder_l, hip_l, 140.0, length=150.0)
-            overrides[NOSE] = kp(*nose)
-        overrides_sequence.append(overrides)
-    frames = make_frames(overrides_sequence)
+    # Built from the shared (now pivot-sweep-safe) clean trajectory, so the
+    # only thing that can make back_rounding fire is the explicit collapsed-
+    # angle override below — not the underlying shoulder pivot sweep, which
+    # _hinge_trajectory_frames already cancels out via its own 170 deg pin.
+    overrides = _clean_overrides(num_reps=1)
+    active = active_frame_offsets(1, FRAMES_DOWN, FRAMES_UP, REST_FRAMES)[0]
+    hip_l = neutral_xy(L_HIP)  # HIP is never overridden by _hinge_trajectory_frames
+    for i in active:
+        shoulder_l = overrides[i][L_SHOULDER][:2]
+        # Nose placed to make angle(nose, shoulder, hip) ~ 140 deg (a
+        # collapsed/rounded back), computed relative to the CURRENT
+        # shoulder position so it doesn't depend on where in the
+        # trajectory we are.
+        nose = point_at_angle(shoulder_l, hip_l, 140.0, length=150.0)
+        overrides[i][NOSE] = kp(*nose)
+    frames = make_frames(overrides)
     reps = analyze(Exercise.DEADLIFT, frames)
     assert len(reps) >= 1
     assert "back_rounding" in reps[0].faults

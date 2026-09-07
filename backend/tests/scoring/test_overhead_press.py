@@ -24,13 +24,22 @@ def _elbow_trajectory_frames(raw_elbow_angles: list[float]) -> list[dict[int, tu
     """Overrides driving WRIST position so the RAW angle(shoulder,elbow,
     wrist) follows `raw_elbow_angles` (increasing toward peak for this
     exercise — the profile inverts it internally to get the primary
-    signal)."""
+    signal). The right wrist reuses the SAME elbow->wrist offset vector as
+    the left (translated to the right elbow) rather than an independent
+    point_at_angle rotation from its own shoulder reference — the same fix
+    as test_bench_press.py's _elbow_trajectory_frames, for the same reason:
+    NEUTRAL_POSE's left/right shoulder-elbow vectors aren't exact mirror
+    images of each other, so rotating each side by the identical raw angle
+    leaves a small residual vertical mismatch between wrists that varies
+    with the target angle and can cross the uneven_press threshold even in
+    an otherwise clean rep."""
     shoulder_l, elbow_l = neutral_xy(L_SHOULDER), neutral_xy(L_ELBOW)
-    shoulder_r, elbow_r = neutral_xy(R_SHOULDER), neutral_xy(R_ELBOW)
+    elbow_r = neutral_xy(R_ELBOW)
     overrides_sequence = []
     for angle in raw_elbow_angles:
         wrist_l = point_at_angle(elbow_l, shoulder_l, angle, length=160.0)
-        wrist_r = point_at_angle(elbow_r, shoulder_r, angle, length=160.0)
+        dx, dy = wrist_l[0] - elbow_l[0], wrist_l[1] - elbow_l[1]
+        wrist_r = (elbow_r[0] + dx, elbow_r[1] + dy)
         overrides_sequence.append({L_WRIST: kp(*wrist_l), R_WRIST: kp(*wrist_r)})
     return overrides_sequence
 

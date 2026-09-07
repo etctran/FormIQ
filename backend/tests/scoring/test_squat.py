@@ -92,27 +92,24 @@ def test_forward_knee_travel_fires_when_foot_index_overridden() -> None:
 
 
 def test_back_rounding_fires_when_shoulder_collapses_relative_to_hip() -> None:
-    angles = repeat_trajectory(
-        linspace_rep(170.0, 70.0, FRAMES_DOWN, FRAMES_UP), 1, rest_value=170.0, rest_frames=REST_FRAMES
-    )
-    knee_l, ankle_l = neutral_xy(L_KNEE), neutral_xy(L_ANKLE)
-    knee_r, ankle_r = neutral_xy(R_KNEE), neutral_xy(R_ANKLE)
-    active = set(active_frame_offsets(1, FRAMES_DOWN, FRAMES_UP, REST_FRAMES)[0])
-    overrides_sequence = []
-    for local_i, angle in enumerate(angles):
-        hip_l = point_at_angle(knee_l, ankle_l, angle, length=250.0)
-        hip_r = point_at_angle(knee_r, ankle_r, angle, length=250.0)
-        overrides = {L_HIP: kp(*hip_l), R_HIP: kp(*hip_r)}
-        if local_i in active:
-            # Shoulder placed to make angle(shoulder, hip, knee) ~ 120 deg
-            # (a collapsed torso), computed relative to the CURRENT hip
-            # position so it doesn't depend on where in the trajectory we are.
-            shoulder_l = point_at_angle(hip_l, knee_l, 120.0, length=200.0)
-            shoulder_r = point_at_angle(hip_r, knee_r, 120.0, length=200.0)
-            overrides[L_SHOULDER] = kp(*shoulder_l)
-            overrides[R_SHOULDER] = kp(*shoulder_r)
-        overrides_sequence.append(overrides)
-    frames = make_frames(overrides_sequence)
+    # Built from the shared (now pivot-sweep-safe) clean trajectory, so the
+    # only thing that can make back_rounding fire is the explicit collapsed-
+    # angle override below — not the underlying hip pivot sweep, which
+    # _knee_trajectory_frames already cancels out via its own 170 deg pin.
+    overrides = _clean_overrides(num_reps=1)
+    active = active_frame_offsets(1, FRAMES_DOWN, FRAMES_UP, REST_FRAMES)[0]
+    knee_l, knee_r = neutral_xy(L_KNEE), neutral_xy(R_KNEE)
+    for i in active:
+        hip_l = overrides[i][L_HIP][:2]
+        hip_r = overrides[i][R_HIP][:2]
+        # Shoulder placed to make angle(shoulder, hip, knee) ~ 120 deg
+        # (a collapsed torso), computed relative to the CURRENT hip
+        # position so it doesn't depend on where in the trajectory we are.
+        shoulder_l = point_at_angle(hip_l, knee_l, 120.0, length=200.0)
+        shoulder_r = point_at_angle(hip_r, knee_r, 120.0, length=200.0)
+        overrides[i][L_SHOULDER] = kp(*shoulder_l)
+        overrides[i][R_SHOULDER] = kp(*shoulder_r)
+    frames = make_frames(overrides)
     reps = analyze(Exercise.SQUAT, frames)
     assert len(reps) >= 1
     assert "back_rounding" in reps[0].faults
