@@ -62,3 +62,29 @@ def test_peak_phase_present_at_the_bottom() -> None:
     rep = segment_phases(seg)[0]
     bottom_index = seg.values.argmin()
     assert rep.phase_by_frame_index[int(bottom_index)] == Phase.PEAK
+
+
+def test_false_start_not_stitched_into_real_rep() -> None:
+    # Signal: REST -> partial dip (0.5, never reaches PEAK) -> REST ->
+    # real rep (down to 0.0, up to 1.0) -> REST. The emitted rep should
+    # only include the real rep, not the earlier false start.
+    false_start = [1.0] * 5 + [0.8, 0.7, 0.6, 0.5, 0.6, 0.7, 0.8] + [1.0] * 3
+    real_rep = _one_rep_values()
+    combined = false_start + real_rep
+    seg = _segment(combined)
+    reps = segment_phases(seg)
+    assert len(reps) == 1
+    # The rep should start after the false start, not at frame 0.
+    assert reps[0].frame_indices[0] > 5  # Must skip the false start phase
+
+
+def test_hysteresis_dead_zone_prevents_spurious_transitions() -> None:
+    # Signal that stays in the REST hysteresis dead zone [REST_EXIT=0.75,
+    # REST_ENTER=0.85) should not cause a phase flip. A value at 0.80
+    # should keep the signal in REST phase without transitioning to DRIVE.
+    values = [1.0] * 10 + [0.80] * 10 + [1.0] * 10
+    seg = _segment(values)
+    phases_result = segment_phases(seg)
+    # No complete rep because signal never reaches PEAK (0.15), so no
+    # RepWindow is emitted.
+    assert phases_result == []

@@ -89,6 +89,11 @@ def segment_phases(segment: SignalSegment) -> list[RepWindow]:
                 )
                 rest_start_local = local_i
                 seen_peak = False
+            else:
+                # Back in REST without ever reaching PEAK (a false start /
+                # hesitation) — treat this as a fresh rest baseline rather
+                # than stitching the aborted dip into a later rep.
+                rest_start_local = local_i
         elif phase == Phase.PEAK:
             seen_peak = True
 
