@@ -66,7 +66,7 @@ def test_excessive_back_lean_fires_when_shoulder_overridden() -> None:
     active = active_frame_offsets(1, FRAMES_DOWN, FRAMES_UP, REST_FRAMES)[0]
     hip_x, hip_y = neutral_xy(L_HIP)
     for i in active:
-        overrides[i][L_SHOULDER] = kp(hip_x + 150.0, hip_y - 300.0)
+        overrides[i][L_SHOULDER] = kp(hip_x + 150.0, hip_y - 50.0)
     frames = make_frames(overrides)
     reps = analyze(Exercise.OVERHEAD_PRESS, frames)
     assert len(reps) >= 1
