@@ -34,7 +34,13 @@ def _ensure_loaded() -> None:
         return
     # Each import below registers its exercise's profile as a side
     # effect. Extended by one line per exercise in Tasks 7-14.
-    from app.scoring.profiles import bench_press, deadlift, overhead_press, squat  # noqa: F401
+    from app.scoring.profiles import (  # noqa: F401
+        bench_press,
+        deadlift,
+        lunge,
+        overhead_press,
+        squat,
+    )
 
     _loaded = True
 
