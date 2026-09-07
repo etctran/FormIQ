@@ -24,14 +24,30 @@ FRAMES_DOWN, FRAMES_UP, REST_FRAMES = 20, 20, 5
 
 def _knee_trajectory_frames(knee_angles: list[float]) -> list[dict[int, tuple]]:
     """Overrides driving HIP position (per side) so angle(hip,knee,ankle)
-    follows `knee_angles`, with KNEE/ANKLE fixed at their neutral pose."""
+    follows `knee_angles`, with KNEE/ANKLE fixed at their neutral pose.
+    SHOULDER is also repositioned each frame, relative to the CURRENT
+    (pivot-swept) HIP position, keeping angle(shoulder,hip,knee) pinned
+    near its neutral ~170 deg value throughout: the single-DOF polar
+    sweep of HIP around the KNEE pivot otherwise drags HIP far enough
+    sideways relative to a fixed-at-neutral SHOULDER to spuriously
+    collapse that angle and trip back_rounding even in an otherwise
+    clean rep."""
     knee_l, ankle_l = neutral_xy(L_KNEE), neutral_xy(L_ANKLE)
     knee_r, ankle_r = neutral_xy(R_KNEE), neutral_xy(R_ANKLE)
     overrides_sequence = []
     for angle in knee_angles:
         hip_l = point_at_angle(knee_l, ankle_l, angle, length=250.0)
         hip_r = point_at_angle(knee_r, ankle_r, angle, length=250.0)
-        overrides_sequence.append({L_HIP: kp(*hip_l), R_HIP: kp(*hip_r)})
+        shoulder_l = point_at_angle(hip_l, knee_l, 170.0, length=200.0)
+        shoulder_r = point_at_angle(hip_r, knee_r, 170.0, length=200.0)
+        overrides_sequence.append(
+            {
+                L_HIP: kp(*hip_l),
+                R_HIP: kp(*hip_r),
+                L_SHOULDER: kp(*shoulder_l),
+                R_SHOULDER: kp(*shoulder_r),
+            }
+        )
     return overrides_sequence
 
 
@@ -68,7 +84,7 @@ def test_forward_knee_travel_fires_when_foot_index_overridden() -> None:
     knee_l_y = neutral_xy(L_KNEE)[1]
     for i in active:
         # Foot index placed far behind the knee (knee travels well past it).
-        overrides[i][L_FOOT_INDEX] = kp(knee_l_x - 200.0, knee_l_y + 20.0)
+        overrides[i][L_FOOT_INDEX] = kp(knee_l_x - 320.0, knee_l_y + 20.0)
     frames = make_frames(overrides)
     reps = analyze(Exercise.SQUAT, frames)
     assert len(reps) >= 1
