@@ -45,9 +45,23 @@ PROFILE = ExerciseProfile(
         threshold_fault(
             name="partial_lockout",
             metric=_ELBOW_ANGLE,
-            phases={Phase.RECOVER, Phase.REST},
+            # REST only: RECOVER's own phase definition (signal below
+            # REST_ENTER) means elbow angle hasn't fully returned to rest
+            # yet by construction, so checking lockout during RECOVER
+            # would always partially violate even a clean rep. Checking
+            # once the rep has actually settled into REST is what
+            # "lockout completion" means. Threshold lowered from 160 to
+            # 150: a rep's REST-phase window is only ever its two boundary
+            # frames (the state machine's rest_start_local collapses to
+            # the last pre-DRIVE sample), and REST_EXIT=0.75 lets that
+            # boundary frame drift down to ~0.75 of this exercise's full
+            # ~100 deg range (~149 deg) before phase officially exits REST
+            # — so 160 would flag even a fully-locked-out clean rep at
+            # that boundary. 150 sits below that natural drift floor while
+            # still catching a rep whose REST frames stayed near ~140.
+            phases={Phase.REST},
             comparison=operator.lt,
-            threshold=160.0,
+            threshold=150.0,
             penalty=0.15,
         ),
         threshold_fault(
