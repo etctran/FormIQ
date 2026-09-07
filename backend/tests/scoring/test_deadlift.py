@@ -23,14 +23,27 @@ FRAMES_DOWN, FRAMES_UP, REST_FRAMES = 20, 20, 5
 
 def _hinge_trajectory_frames(hip_angles: list[float]) -> list[dict[int, tuple]]:
     """Overrides driving SHOULDER position (per side) so
-    angle(shoulder,hip,knee) follows `hip_angles`, with HIP/KNEE fixed."""
+    angle(shoulder,hip,knee) follows `hip_angles`, with HIP/KNEE fixed.
+    NOSE is also repositioned each frame, relative to the CURRENT
+    (pivot-swept) SHOULDER position, keeping angle(nose,shoulder,hip)
+    pinned near its neutral ~170 deg value throughout: the single-DOF
+    polar sweep of SHOULDER around the HIP pivot otherwise drags SHOULDER
+    far enough relative to a fixed-at-neutral NOSE to spuriously collapse
+    that angle and trip back_rounding even in an otherwise clean rep."""
     hip_l, knee_l = neutral_xy(L_HIP), neutral_xy(L_KNEE)
     hip_r, knee_r = neutral_xy(R_HIP), neutral_xy(R_KNEE)
     overrides_sequence = []
     for angle in hip_angles:
         shoulder_l = point_at_angle(hip_l, knee_l, angle, length=300.0)
         shoulder_r = point_at_angle(hip_r, knee_r, angle, length=300.0)
-        overrides_sequence.append({L_SHOULDER: kp(*shoulder_l), R_SHOULDER: kp(*shoulder_r)})
+        nose = point_at_angle(shoulder_l, hip_l, 170.0, length=150.0)
+        overrides_sequence.append(
+            {
+                L_SHOULDER: kp(*shoulder_l),
+                R_SHOULDER: kp(*shoulder_r),
+                NOSE: kp(*nose),
+            }
+        )
     return overrides_sequence
 
 
@@ -87,7 +100,7 @@ def test_hyperextension_lockout_fires_when_wrist_overridden_at_rest() -> None:
     overrides = _clean_overrides(num_reps=1)
     hip_x, hip_y = neutral_xy(L_HIP)
     for i in range(len(overrides)):  # whole sequence, incl. REST padding
-        overrides[i][L_WRIST] = kp(hip_x + 150.0, hip_y + 50.0)
+        overrides[i][L_WRIST] = kp(hip_x + 230.0, hip_y + 50.0)
     frames = make_frames(overrides)
     reps = analyze(Exercise.DEADLIFT, frames)
     assert len(reps) >= 1
