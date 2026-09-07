@@ -60,9 +60,14 @@ def build_signal_segments(
 
     # Handle any remaining None run at the end
     if none_indices:
+        # Apply the same short-vs-long decision for trailing Nones
+        if none_start_ts is not None:
+            gap_duration = timestamps[-1] - none_start_ts
+            if gap_duration <= max_gap_sec:
+                # Small trailing gap: include for interpolation
+                current.extend(none_indices)
         if current:
             segments_idx.append(current)
-        # Don't add segment if it ends with Nones
     elif current:
         segments_idx.append(current)
 
@@ -93,7 +98,7 @@ def build_signal_segments(
 
         if len(ts) > 1:
             fps = len(ts) / max(ts[-1] - ts[0], 1e-6)
-            window = max(1, int(round(smoothing_window_sec * fps)))
+            window = max(1, round(smoothing_window_sec * fps))
         else:
             window = 1
         if window > 1:

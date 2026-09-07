@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from app.scoring.signal import build_signal_segments
 
@@ -61,3 +60,19 @@ def test_all_none_produces_no_segment() -> None:
     values: list[float | None] = [None] * 30
     timestamps = [i / 30.0 for i in range(30)]
     assert build_signal_segments(values, timestamps) == []
+
+
+def test_short_trailing_gap_is_interpolated() -> None:
+    """A clean trajectory with only the last 2 frames None should
+    interpolate them, not truncate the segment."""
+    values, timestamps = _linear_trajectory(60)
+    values[58] = None
+    values[59] = None
+    segments = build_signal_segments(values, timestamps)
+    assert len(segments) == 1
+    seg = segments[0]
+    # All 60 frames should be included (Nones interpolated)
+    assert len(seg.frame_indices) == 60
+    # Last frames should have interpolated values (not NaN)
+    assert not np.isnan(seg.values[58])
+    assert not np.isnan(seg.values[59])
