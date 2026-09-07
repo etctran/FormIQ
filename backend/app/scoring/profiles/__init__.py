@@ -41,6 +41,7 @@ def _ensure_loaded() -> None:
         overhead_press,
         pullup,
         pushup,
+        row,
         squat,
     )
 
