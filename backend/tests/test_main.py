@@ -15,8 +15,8 @@ def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_analyze_stub_returns_empty_reps() -> None:
-    video_bytes = b"not a real video, scaffolding stub"
+def test_analyze_invalid_video_returns_empty_reps() -> None:
+    video_bytes = b"not a real video"
     response = client.post(
         "/analyze/squat",
         files={"video": ("clip.mp4", video_bytes, "video/mp4")},
@@ -27,6 +27,64 @@ def test_analyze_stub_returns_empty_reps() -> None:
     assert body["reps"] == []
     assert body["frame_count"] == 0
     assert body["frames"] == []
+
+
+def test_analyze_returns_real_reps_for_synthetic_squat_video(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.scoring.fixtures import (
+        kp,
+        linspace_rep,
+        make_frames,
+        neutral_xy,
+        point_at_angle,
+        repeat_trajectory,
+    )
+
+    L_HIP, R_HIP = 23, 24
+    L_KNEE, R_KNEE = 25, 26
+    L_ANKLE, R_ANKLE = 27, 28
+    L_SHOULDER, R_SHOULDER = 11, 12
+
+    angles = repeat_trajectory(linspace_rep(170.0, 70.0, 20, 20), 2, rest_value=170.0, rest_frames=5)
+    knee_l, ankle_l = neutral_xy(L_KNEE), neutral_xy(L_ANKLE)
+    knee_r, ankle_r = neutral_xy(R_KNEE), neutral_xy(R_ANKLE)
+    overrides_sequence = []
+    for angle in angles:
+        hip_l = point_at_angle(knee_l, ankle_l, angle, length=250.0)
+        hip_r = point_at_angle(knee_r, ankle_r, angle, length=250.0)
+        # SHOULDER must be repositioned relative to the swept HIP each frame
+        # (angle(shoulder,hip,knee) pinned near its neutral ~170 deg value) —
+        # see tests/scoring/test_squat.py::_knee_trajectory_frames — otherwise
+        # a fixed-at-neutral SHOULDER spuriously trips back_rounding even in
+        # an otherwise clean rep.
+        shoulder_l = point_at_angle(hip_l, knee_l, 170.0, length=200.0)
+        shoulder_r = point_at_angle(hip_r, knee_r, 170.0, length=200.0)
+        overrides_sequence.append(
+            {
+                L_HIP: kp(*hip_l),
+                R_HIP: kp(*hip_r),
+                L_SHOULDER: kp(*shoulder_l),
+                R_SHOULDER: kp(*shoulder_r),
+            }
+        )
+    synthetic_frames = make_frames(overrides_sequence)
+
+    class FakeExtractor:
+        def extract(self, path: str) -> list:
+            return synthetic_frames
+
+    monkeypatch.setattr("app.api.routes.cv_engine.KeypointExtractor", FakeExtractor)
+
+    response = client.post(
+        "/analyze/squat",
+        files={"video": ("clip.mp4", b"x", "video/mp4")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["frame_count"] == len(synthetic_frames)
+    assert len(body["reps"]) == 2
+    for rep in body["reps"]:
+        assert rep["faults"] == []
+        assert rep["form_accuracy"] == pytest.approx(1.0)
 
 
 def test_analyze_rejects_unknown_exercise() -> None:

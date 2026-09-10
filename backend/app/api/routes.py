@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.history import service
 from app.history.database import get_session
 from app.schemas.analysis import AnalysisResponse, Exercise
+from app.schemas.keypoint import Frame as FrameSchema
+from app.scoring import pipeline as scoring_pipeline
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,7 +31,12 @@ async def analyze(
         tmp.flush()
         frames = cv_engine.KeypointExtractor().extract(tmp.name)
 
-    response = AnalysisResponse(exercise=exercise, frame_count=len(frames), reps=[], frames=frames)
+    frame_models = [FrameSchema.model_validate(f) for f in frames]
+    reps = scoring_pipeline.analyze(exercise, frame_models)
+
+    response = AnalysisResponse(
+        exercise=exercise, frame_count=len(frame_models), reps=reps, frames=frame_models
+    )
 
     try:
         service.log_video_entry(session, exercise, response)
