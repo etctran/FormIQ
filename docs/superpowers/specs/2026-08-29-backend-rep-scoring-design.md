@@ -1,7 +1,38 @@
 # Backend rep-segmentation + per-exercise form-accuracy scoring
 
-Status: Draft for review
+Status: Implemented (2026-09-10), with known deviations — see note below
 Date: 2026-08-29
+
+## Implementation notes (added post-ship)
+
+- **Known limitation, not yet fixed:** `bench_press`'s `partial_lockout` and
+  `pullup`'s `incomplete_lockout_bottom` both use an absolute REST-phase
+  angle threshold (150°) derived from a single-ROM test fixture. Because a
+  rep's REST window is always exactly the two hysteresis-boundary frames
+  (see `phases.py`), an absolute threshold there is sensitive to the video's
+  actual rest angle and rep depth — a real full-ROM rep whose rest angle
+  isn't close to 170° can be scored as an incomplete lockout. Fixing this
+  properly needs a threshold that's relative to the video's own signal (e.g.
+  percentile-normalized, matching the self-calibrating approach used
+  elsewhere) rather than an absolute constant — tracked as follow-up work,
+  not fixed as part of this spec's implementation.
+- A few faults ended up defined slightly differently than first described
+  below, discovered and corrected during implementation (verified against
+  hand-built geometry, not just read): deadlift's `back_rounding` uses
+  `angle(NOSE, SHOULDER, HIP)` rather than a shoulder–hip–knee line (avoids
+  tautology with the primary signal); pushup's `hip_sag` uses
+  `angle(SHOULDER, HIP, ANKLE)` directly rather than a normalized deviation
+  from a shoulder–ankle line; bench_press's `partial_lockout` is scoped to
+  `{REST}` only (not `{RECOVER, REST}` — the original scoping structurally
+  fired on every clean rep); deadlift's `hyperextension_lockout` is likewise
+  scoped to `{REST}` only (fixed post-launch — its original `{REST,
+  RECOVER}` scoping overlapped with `bar_path_drift`'s identical metric,
+  double-penalizing one deviation).
+- All numeric thresholds/penalties below remain defaults, per the Non-goals
+  section — several were adjusted from their originally-proposed values
+  during implementation once synthetic test fixtures revealed a proposed
+  value didn't actually trigger its own fault; none of this changes the
+  Non-goals' framing that these aren't validated against real labeled data.
 
 ## Goal
 

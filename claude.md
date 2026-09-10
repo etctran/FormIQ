@@ -27,10 +27,17 @@ Docker, built/released with GitHub Actions.
   target, not a hard gate — see
   `docs/superpowers/specs/2026-08-20-cv-engine-pose-extraction-design.md`).
 - `backend/` — FastAPI. Imports the compiled `cv-engine` extension module
-  directly. `/analyze/{exercise}` returns real `frame_count` from the
-  pipeline above; `reps` is still always `[]` — rep-segmentation and
-  per-exercise form-accuracy scoring is not built yet (separate,
-  not-yet-started sub-project). `backend/app/history/` (SQLite via
+  directly. `/analyze/{exercise}` returns real `frame_count` AND real
+  `reps` — `backend/app/scoring/` (landmark geometry, per-video signal
+  normalization, a 4-phase REST/DRIVE/PEAK/RECOVER state machine,
+  declarative per-exercise fault rules, a registry of all 8
+  `ExerciseProfile`s) turns cv-engine's per-frame keypoints into rep
+  boundaries and named-fault `form_accuracy` scores. See
+  `docs/superpowers/specs/2026-08-29-backend-rep-scoring-design.md`
+  (including its "Implementation notes" section — one known limitation:
+  `bench_press`/`pullup`'s lockout-completion faults use an absolute
+  threshold that's sensitive to a video's actual rest angle, not yet
+  fixed). `backend/app/history/` (SQLite via
   SQLAlchemy — model, Pydantic schemas, service layer) plus the
   `/history` router give the app a durable, single-user workout log: every
   `/analyze` call auto-logs a `source="video"` entry (best-effort — a
@@ -46,18 +53,20 @@ Docker, built/released with GitHub Actions.
   `'history'` state alongside `idle`/`analyzing`/`results` in `App.tsx`
   (no router) reaches `HistoryView` (list + delete) and `ManualEntryForm`
   (log a workout without a video).
-  `frontend/src/mockReps.ts` is a deliberate, isolated mock-data fallback —
+  `frontend/src/mockReps.ts` is a now-obsolete mock-data fallback —
   `getReps()` returns the backend's real `reps` when non-empty, otherwise
-  deterministic mock reps seeded from the video's real duration, so the UI
-  could be built and reviewed against the real `RepScore` shape ahead of
-  backend scoring existing. No other file branches on real-vs-mock; delete
-  `mockReps.ts`/`mockReps.test.ts` and swap the one call site in
-  `ResultsView.tsx` for `response.reps` once backend scoring ships. Note:
-  `HistoryView` reads the real (always-empty) `reps` directly, so until
-  that scoring work ships, the same analyzed video shows fabricated reps
-  in `ResultsView` but "rep scoring not yet available" in History — a
-  visible seam, not a bug, that closes automatically once `mockReps.ts` is
-  deleted.
+  deterministic mock reps, so the UI could be built ahead of backend
+  scoring existing. **Backend scoring has now shipped** (see `backend/`
+  above), so `reps` is real for every successfully-analyzed video; the
+  mock path only still activates for a video where scoring genuinely found
+  zero completed reps (matching the spec's own "no reps: []" edge case),
+  which now reads as a false "reps detected" in `ResultsView` — this
+  frontend cleanup (delete `mockReps.ts`/`mockReps.test.ts`, swap
+  `ResultsView.tsx`'s one call site to `response.reps` directly) is a
+  small, not-yet-done follow-up, not a design decision anymore.
+  `HistoryView` already reads `response.reps` directly (no mock layer), so
+  History and Results can now disagree only in this one edge case, not
+  routinely as before.
 - `infra/` — Dockerfiles, ECS task defs, GitHub Actions workflows. AWS
   ECS/Terraform/CI-CD deployment was fully designed (backend-only scope,
   Terraform applied manually, GitHub OIDC, Fargate w/ public IP, no ALB)
@@ -94,11 +103,16 @@ Docker, built/released with GitHub Actions.
 ## Current focus
 Scaffolding phase is done — cv-engine's real pose extraction and the
 frontend's real upload/results UI are both built and merged. Workout
-history tracking (`backend/app/history/`, `HistoryView`/`ManualEntryForm`)
-is also built and merged — see `backend/` and `frontend/` above. Two
-sub-projects remain, neither started:
-- Backend rep-segmentation + per-exercise form-accuracy scoring (why
-  `reps` is still always `[]`, and why `frontend/src/mockReps.ts` exists).
+history tracking and backend rep-segmentation + form-accuracy scoring are
+also both built and merged — see `backend/` above. Remaining work:
+- Frontend cleanup: delete `frontend/src/mockReps.ts`/`mockReps.test.ts`
+  and switch `ResultsView.tsx` to `response.reps` directly, now that
+  backend scoring is real (small, not yet done).
+- A known scoring limitation: `bench_press`/`pullup`'s lockout-completion
+  faults use an absolute angle threshold sensitive to a video's actual
+  rest angle, not just rep depth — see the rep-scoring spec's
+  "Implementation notes" section for the fix approach (a percentile-
+  relative threshold, not a constant).
 - AWS ECS deployment (design approved in conversation, never written down
   — needs its own spec pass before implementation). Note this now has a
   new hard requirement it didn't have before: `backend/data/formiq.db`
