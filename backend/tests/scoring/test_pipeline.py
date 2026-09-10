@@ -71,7 +71,7 @@ def test_low_visibility_gap_still_detects_reps_around_it() -> None:
 def test_scoring_failure_is_caught_and_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.scoring.pipeline as pipeline_module
 
-    def _boom(exercise, frames):  # noqa: ARG001
+    def _boom(exercise, frames):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(pipeline_module, "_analyze", _boom)

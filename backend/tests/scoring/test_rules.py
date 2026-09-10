@@ -1,7 +1,5 @@
 import operator
 
-import pytest
-
 from app.schemas.keypoint import Frame, Keypoint
 from app.scoring.phases import Phase, RepWindow
 from app.scoring.rules import compute_form_accuracy, evaluate_fault_rules, threshold_fault

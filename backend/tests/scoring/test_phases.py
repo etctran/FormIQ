@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from app.scoring.phases import Phase, segment_phases
 from app.scoring.signal import SignalSegment
