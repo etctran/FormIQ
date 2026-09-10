@@ -1,7 +1,10 @@
 import pytest
 
 from app.schemas.analysis import Exercise
+from app.scoring.phases import Phase, segment_phases
 from app.scoring.pipeline import analyze
+from app.scoring.profiles.deadlift import PROFILE
+from app.scoring.signal import build_signal_segments
 from tests.scoring.fixtures import (
     active_frame_offsets,
     kp,
@@ -106,3 +109,41 @@ def test_hyperextension_lockout_fires_when_wrist_overridden_at_rest() -> None:
     reps = analyze(Exercise.DEADLIFT, frames)
     assert len(reps) >= 1
     assert "hyperextension_lockout" in reps[0].faults
+
+
+def _rest_frame_indices_for_clean_rep(overrides: list[dict[int, tuple]]) -> list[int]:
+    """The global frame indices the pipeline itself classifies as
+    Phase.REST for the single rep in `overrides` (built from the clean,
+    un-overridden hip-hinge trajectory, since the wrist is not part of
+    the primary signal and so doesn't affect phase segmentation)."""
+    base_frames = make_frames(overrides)
+    raw_values = [PROFILE.primary_signal(f) for f in base_frames]
+    timestamps = [f.timestamp_sec for f in base_frames]
+    segments = build_signal_segments(raw_values, timestamps)
+    rep_windows = [w for seg in segments for w in segment_phases(seg)]
+    assert len(rep_windows) == 1
+    return [
+        i
+        for i, phase in rep_windows[0].phase_by_frame_index.items()
+        if phase == Phase.REST
+    ]
+
+
+def test_hyperextension_lockout_rest_only_override_does_not_also_fire_bar_path_drift() -> None:
+    """A wrist deviation confined strictly to REST-phase frames should
+    fire hyperextension_lockout (phases={REST}) without also firing
+    bar_path_drift (phases={DRIVE, RECOVER}) — proving the two rules no
+    longer overlap after narrowing hyperextension_lockout off RECOVER."""
+    base_overrides = _clean_overrides(num_reps=1)
+    rest_indices = _rest_frame_indices_for_clean_rep(base_overrides)
+    assert rest_indices  # sanity: the rep does have REST-phase frames
+
+    overrides = _clean_overrides(num_reps=1)
+    hip_x, hip_y = neutral_xy(L_HIP)
+    for i in rest_indices:
+        overrides[i][L_WRIST] = kp(hip_x + 230.0, hip_y + 50.0)
+    frames = make_frames(overrides)
+    reps = analyze(Exercise.DEADLIFT, frames)
+    assert len(reps) >= 1
+    assert "hyperextension_lockout" in reps[0].faults
+    assert "bar_path_drift" not in reps[0].faults

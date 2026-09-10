@@ -53,7 +53,7 @@ PROFILE = ExerciseProfile(
         threshold_fault(
             name="hyperextension_lockout",
             metric=horizontal_offset_metric(WRIST, HIP, normalize=(SHOULDER, HIP)),
-            phases={Phase.REST, Phase.RECOVER},
+            phases={Phase.REST},
             comparison=operator.gt,
             threshold=0.3,
             penalty=0.10,
