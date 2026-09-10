@@ -1,6 +1,14 @@
 import pytest
 
 from app.schemas.analysis import Exercise
+from app.scoring.profiles import ExerciseProfile, get_profile
+
+
+@pytest.mark.parametrize("exercise", list(Exercise))
+def test_all_exercises_have_a_registered_profile(exercise: Exercise) -> None:
+    profile = get_profile(exercise)
+    assert isinstance(profile, ExerciseProfile)
+    assert len(profile.fault_rules) > 0
 
 
 def test_register_and_get_profile(monkeypatch: pytest.MonkeyPatch) -> None:
