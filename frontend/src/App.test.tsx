@@ -3,7 +3,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
-const mockAnalysisResponse = { exercise: 'squat', frame_count: 100, reps: [], frames: [] }
+const mockAnalysisResponse = {
+  exercise: 'squat',
+  frame_count: 100,
+  reps: [
+    { rep_index: 0, start_sec: 0, end_sec: 4, form_accuracy: 0.92, faults: [] },
+    { rep_index: 1, start_sec: 4, end_sec: 8, form_accuracy: 0.78, faults: ['Knee valgus'] },
+    { rep_index: 2, start_sec: 8, end_sec: 12, form_accuracy: 0.95, faults: [] },
+  ],
+  frames: [],
+}
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -25,7 +34,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /analyze/i })).toBeDisabled()
   })
 
-  it('walks from idle through analyzing to results with mock rep cards', async () => {
+  it('walks from idle through analyzing to results with rep cards', async () => {
     render(<App />)
     await waitFor(() => expect(screen.getByText(/Backend: online/)).toBeInTheDocument())
 
@@ -52,11 +61,12 @@ describe('App', () => {
     fireEvent.loadedMetadata(video)
 
     // Resolving proves the cards rendered; the real assertion is specific,
-    // known content. For a 12s mock video, mockReps.ts's getReps derives
-    // repCount = round(12 / 4) = 3 reps of 4s each, so rep index 0 gets
-    // MOCK_ACCURACIES[0] = 0.92 -> "92%". A generic "some Rep text
-    // exists" check can't fail independently of findAllByText itself;
-    // this proves the cards are actually data-driven from the mock.
+    // known content. mockAnalysisResponse.reps[0].form_accuracy = 0.92 ->
+    // "92%". A generic "some Rep text exists" check can't fail
+    // independently of findAllByText itself; this proves the cards are
+    // actually data-driven from the backend's response, not synthesized
+    // client-side (there is no mock-data fallback anymore — the backend's
+    // real reps render directly).
     await screen.findAllByText(/^Rep \d/)
     expect(screen.getByText('92%')).toBeInTheDocument()
   })

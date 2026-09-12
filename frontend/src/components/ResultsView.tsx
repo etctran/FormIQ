@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AnalysisResponse } from '../types'
-import { getReps } from '../mockReps'
 import { Timeline } from './Timeline'
 import { RepCard } from './RepCard'
 import { SkeletonOverlay } from './SkeletonOverlay'
@@ -64,16 +63,13 @@ export function ResultsView({ response, video, onReset }: ResultsViewProps) {
 
   // If real video metadata never loads (playback error), fall back to an
   // estimated duration derived from frame_count at the project's standard
-  // 30fps sampling rate, so getReps still has something to lay reps out
-  // against instead of silently rendering nothing.
+  // 30fps sampling rate, so the Timeline still has something to lay reps
+  // out against instead of silently rendering nothing.
   const fallbackDurationSec = response.frame_count > 0 ? response.frame_count / 30 : 0
   const effectiveDurationSec =
     durationSec > 0 ? durationSec : playbackError ? fallbackDurationSec : 0
 
-  const reps = useMemo(
-    () => getReps(response, effectiveDurationSec),
-    [response, effectiveDurationSec],
-  )
+  const reps = response.reps
 
   const handleSeek = (seconds: number) => {
     if (videoRef.current) {

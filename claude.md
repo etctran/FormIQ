@@ -53,20 +53,11 @@ Docker, built/released with GitHub Actions.
   `'history'` state alongside `idle`/`analyzing`/`results` in `App.tsx`
   (no router) reaches `HistoryView` (list + delete) and `ManualEntryForm`
   (log a workout without a video).
-  `frontend/src/mockReps.ts` is a now-obsolete mock-data fallback —
-  `getReps()` returns the backend's real `reps` when non-empty, otherwise
-  deterministic mock reps, so the UI could be built ahead of backend
-  scoring existing. **Backend scoring has now shipped** (see `backend/`
-  above), so `reps` is real for every successfully-analyzed video; the
-  mock path only still activates for a video where scoring genuinely found
-  zero completed reps (matching the spec's own "no reps: []" edge case),
-  which now reads as a false "reps detected" in `ResultsView` — this
-  frontend cleanup (delete `mockReps.ts`/`mockReps.test.ts`, swap
-  `ResultsView.tsx`'s one call site to `response.reps` directly) is a
-  small, not-yet-done follow-up, not a design decision anymore.
-  `HistoryView` already reads `response.reps` directly (no mock layer), so
-  History and Results can now disagree only in this one edge case, not
-  routinely as before.
+  `ResultsView.tsx` renders `response.reps` directly — the old
+  `mockReps.ts` mock-data fallback (used before backend scoring existed)
+  has been deleted along with `mockReps.test.ts`, now that backend scoring
+  is real. `HistoryView` already read `response.reps` directly, so both
+  views now agree on the same real data with no mock layer anywhere.
 - `infra/` — Dockerfiles, ECS task defs, GitHub Actions workflows. AWS
   ECS/Terraform/CI-CD deployment was fully designed (backend-only scope,
   Terraform applied manually, GitHub OIDC, Fargate w/ public IP, no ALB)
@@ -104,10 +95,9 @@ Docker, built/released with GitHub Actions.
 Scaffolding phase is done — cv-engine's real pose extraction and the
 frontend's real upload/results UI are both built and merged. Workout
 history tracking and backend rep-segmentation + form-accuracy scoring are
-also both built and merged — see `backend/` above. Remaining work:
-- Frontend cleanup: delete `frontend/src/mockReps.ts`/`mockReps.test.ts`
-  and switch `ResultsView.tsx` to `response.reps` directly, now that
-  backend scoring is real (small, not yet done).
+also both built and merged — see `backend/` above, including the frontend
+cleanup (`mockReps.ts` deleted, `ResultsView.tsx` reads `response.reps`
+directly). Remaining work:
 - A known scoring limitation: `bench_press`/`pullup`'s lockout-completion
   faults use an absolute angle threshold sensitive to a video's actual
   rest angle, not just rep depth — see the rep-scoring spec's
