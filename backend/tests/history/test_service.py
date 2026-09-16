@@ -1,3 +1,5 @@
+import csv
+import io
 from datetime import date
 
 import pytest
@@ -117,3 +119,27 @@ def test_update_entry_can_change_exercise(session: Session) -> None:
 
     assert updated is not None
     assert updated.exercise == "row"
+
+
+def test_entries_to_csv_includes_header_and_rows(session: Session) -> None:
+    data = ManualEntryCreate(
+        exercise=Exercise.SQUAT, date=date(2026, 9, 1), sets=3, reps=8, weight=100.0
+    )
+    entry = service.create_entry(session, data)
+
+    csv_text = service.entries_to_csv([entry])
+
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert rows[0] == [
+        "id", "exercise", "date", "source", "created_at", "sets", "reps",
+        "weight", "notes", "rep_count", "avg_form_accuracy",
+    ]
+    assert rows[1][0] == str(entry.id)
+    assert rows[1][1] == "squat"
+    assert rows[1][5] == "3"  # sets
+
+
+def test_entries_to_csv_handles_empty_list() -> None:
+    csv_text = service.entries_to_csv([])
+    rows = list(csv.reader(io.StringIO(csv_text)))
+    assert len(rows) == 1  # header only

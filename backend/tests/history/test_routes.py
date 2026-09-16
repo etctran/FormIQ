@@ -88,3 +88,29 @@ def test_update_manual_entry_rejects_invalid_body() -> None:
 
     response = client.patch(f"/history/{entry_id}", json={"sets": 0})
     assert response.status_code == 422
+
+
+def test_export_json_matches_list_endpoint() -> None:
+    client.post(
+        "/history", json={"exercise": "squat", "date": "2026-09-01", "sets": 3, "reps": 8}
+    )
+    list_response = client.get("/history")
+    export_response = client.get("/history/export?format=json")
+    assert export_response.status_code == 200
+    assert export_response.json() == list_response.json()
+
+
+def test_export_csv_returns_csv_content_type_and_header_row() -> None:
+    client.post(
+        "/history", json={"exercise": "squat", "date": "2026-09-01", "sets": 3, "reps": 8}
+    )
+    response = client.get("/history/export")  # default format
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    assert response.text.splitlines()[0].startswith("id,exercise,date")
+
+
+def test_export_rejects_unknown_format() -> None:
+    response = client.get("/history/export?format=xml")
+    assert response.status_code == 422

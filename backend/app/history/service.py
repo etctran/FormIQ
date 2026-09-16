@@ -6,6 +6,8 @@ auto-log side effect.
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -88,3 +90,18 @@ def update_entry(
     session.commit()
     session.refresh(entry)
     return entry
+
+
+_CSV_FIELDS = [
+    "id", "exercise", "date", "source", "created_at", "sets", "reps",
+    "weight", "notes", "rep_count", "avg_form_accuracy",
+]
+
+
+def entries_to_csv(entries: list[WorkoutEntry]) -> str:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(_CSV_FIELDS)
+    for entry in entries:
+        writer.writerow([getattr(entry, field) for field in _CSV_FIELDS])
+    return buffer.getvalue()

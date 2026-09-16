@@ -3,7 +3,11 @@ by app.api.routes to auto-log every successful video analysis."""
 
 from __future__ import annotations
 
+import json
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.history import service
@@ -26,10 +30,20 @@ def list_history_entries(session: Session = Depends(get_session)) -> list[Workou
     return service.list_entries(session)
 
 
-@router.delete("/{entry_id}", status_code=204)
-def delete_history_entry(entry_id: int, session: Session = Depends(get_session)) -> None:
-    if not service.delete_entry(session, entry_id):
-        raise HTTPException(status_code=404, detail="History entry not found")
+@router.get("/export")
+def export_history_entries(
+    format: Literal["csv", "json"] = "csv", session: Session = Depends(get_session)
+) -> Response:
+    entries = service.list_entries(session)
+    if format == "json":
+        payload = [HistoryEntry.model_validate(e).model_dump(mode="json") for e in entries]
+        return Response(content=json.dumps(payload), media_type="application/json")
+    csv_text = service.entries_to_csv(entries)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=workout_history.csv"},
+    )
 
 
 @router.patch("/{entry_id}", response_model=HistoryEntry)
@@ -43,3 +57,9 @@ def update_history_entry(
     if entry is None:
         raise HTTPException(status_code=404, detail="History entry not found")
     return entry
+
+
+@router.delete("/{entry_id}", status_code=204)
+def delete_history_entry(entry_id: int, session: Session = Depends(get_session)) -> None:
+    if not service.delete_entry(session, entry_id):
+        raise HTTPException(status_code=404, detail="History entry not found")
