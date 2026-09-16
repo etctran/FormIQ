@@ -61,3 +61,43 @@ def test_history_entry_converts_from_orm_attributes() -> None:
     assert entry.id == 1
     assert entry.source == "manual"
     assert entry.sets == 3
+
+
+def test_history_entry_treats_naive_created_at_as_utc() -> None:
+    orm_entry = _FakeOrmEntry(
+        id=1,
+        exercise="squat",
+        date=date_(2026, 9, 1),
+        source="manual",
+        created_at=datetime_(2026, 9, 1, 12, 0, 0),  # noqa: DTZ001 naive — simulates SQLite
+        sets=3,
+        reps=8,
+        weight=100.0,
+        notes=None,
+        rep_count=None,
+        avg_form_accuracy=None,
+        rep_scores=None,
+    )
+    entry = HistoryEntry.model_validate(orm_entry)
+    assert entry.created_at.tzinfo is not None
+    assert entry.created_at == datetime_(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+
+
+def test_history_entry_leaves_already_aware_created_at_unchanged() -> None:
+    aware = datetime_(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
+    orm_entry = _FakeOrmEntry(
+        id=1,
+        exercise="squat",
+        date=date_(2026, 9, 1),
+        source="manual",
+        created_at=aware,
+        sets=3,
+        reps=8,
+        weight=100.0,
+        notes=None,
+        rep_count=None,
+        avg_form_accuracy=None,
+        rep_scores=None,
+    )
+    entry = HistoryEntry.model_validate(orm_entry)
+    assert entry.created_at == aware
