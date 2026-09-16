@@ -1,16 +1,16 @@
-from logging.config import fileConfig
+import os
 import sys
+from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.history.database import Base, DEFAULT_DB_PATH  # noqa: E402
-from app.history import models  # noqa: E402,F401  (registers WorkoutEntry on Base.metadata)
+from app.history import models  # noqa: F401  (registers WorkoutEntry on Base.metadata)
+from app.history.database import DEFAULT_DB_PATH, Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -27,13 +27,8 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
-# Use DEFAULT_DB_PATH unless alembic.ini has been explicitly customized
-# (e.g. for testing with a temporary database)
-current_url = config.get_main_option("sqlalchemy.url")
-if current_url.startswith("driver://") or current_url.startswith("postgresql://"):
-    # Placeholder or generic URL in alembic.ini - use DEFAULT_DB_PATH
-    config.set_main_option("sqlalchemy.url", f"sqlite:///{DEFAULT_DB_PATH}")
-# else: alembic.ini has been explicitly set (e.g. for testing) - respect it
+db_path = os.environ.get("ALEMBIC_DB_PATH", DEFAULT_DB_PATH)
+config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
