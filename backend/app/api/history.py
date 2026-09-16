@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.history import service
 from app.history.database import get_session
 from app.history.models import WorkoutEntry
-from app.history.schemas import HistoryEntry, ManualEntryCreate
+from app.history.schemas import HistoryEntry, ManualEntryCreate, ManualEntryUpdate
 
 router = APIRouter(prefix="/history", tags=["history"])
 
@@ -30,3 +30,16 @@ def list_history_entries(session: Session = Depends(get_session)) -> list[Workou
 def delete_history_entry(entry_id: int, session: Session = Depends(get_session)) -> None:
     if not service.delete_entry(session, entry_id):
         raise HTTPException(status_code=404, detail="History entry not found")
+
+
+@router.patch("/{entry_id}", response_model=HistoryEntry)
+def update_history_entry(
+    entry_id: int, data: ManualEntryUpdate, session: Session = Depends(get_session)
+) -> WorkoutEntry:
+    try:
+        entry = service.update_entry(session, entry_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if entry is None:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return entry

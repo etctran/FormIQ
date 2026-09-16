@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.history import service
 from app.history.database import Base, build_engine
-from app.history.schemas import ManualEntryCreate
+from app.history.schemas import ManualEntryCreate, ManualEntryUpdate
 from app.schemas.analysis import AnalysisResponse, Exercise, RepScore
 
 
@@ -80,3 +80,40 @@ def test_log_video_entry_with_no_reps_has_no_average(session: Session) -> None:
     assert entry.rep_count == 0
     assert entry.avg_form_accuracy is None
     assert entry.rep_scores == []
+
+
+def test_update_entry_applies_only_provided_fields(session: Session) -> None:
+    data = ManualEntryCreate(exercise=Exercise.SQUAT, date=date(2026, 9, 1), sets=3, reps=8)
+    entry = service.create_entry(session, data)
+
+    updated = service.update_entry(
+        session, entry.id, ManualEntryUpdate(sets=5, notes="felt strong")
+    )
+
+    assert updated is not None
+    assert updated.sets == 5
+    assert updated.notes == "felt strong"
+    assert updated.reps == 8  # untouched field keeps its original value
+    assert updated.exercise == "squat"  # untouched field keeps its original value
+
+
+def test_update_entry_returns_none_when_not_found(session: Session) -> None:
+    assert service.update_entry(session, 999, ManualEntryUpdate(sets=5)) is None
+
+
+def test_update_entry_rejects_video_entries(session: Session) -> None:
+    response = AnalysisResponse(exercise=Exercise.SQUAT, frame_count=0, frames=[], reps=[])
+    entry = service.log_video_entry(session, Exercise.SQUAT, response)
+
+    with pytest.raises(ValueError, match="manual"):
+        service.update_entry(session, entry.id, ManualEntryUpdate(sets=5))
+
+
+def test_update_entry_can_change_exercise(session: Session) -> None:
+    data = ManualEntryCreate(exercise=Exercise.SQUAT, date=date(2026, 9, 1), sets=3, reps=8)
+    entry = service.create_entry(session, data)
+
+    updated = service.update_entry(session, entry.id, ManualEntryUpdate(exercise=Exercise.ROW))
+
+    assert updated is not None
+    assert updated.exercise == "row"

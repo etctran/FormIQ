@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.history.models import WorkoutEntry
-from app.history.schemas import ManualEntryCreate
+from app.history.schemas import ManualEntryCreate, ManualEntryUpdate
 from app.schemas.analysis import AnalysisResponse, Exercise
 
 
@@ -64,6 +64,27 @@ def log_video_entry(
         rep_scores=[rep.model_dump(mode="json") for rep in response.reps],
     )
     session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    return entry
+
+
+def update_entry(
+    session: Session, entry_id: int, data: ManualEntryUpdate
+) -> WorkoutEntry | None:
+    entry = session.get(WorkoutEntry, entry_id)
+    if entry is None:
+        return None
+    if entry.source != "manual":
+        raise ValueError("only manual entries can be edited")
+
+    updates = data.model_dump(exclude_unset=True)
+    if "exercise" in updates:
+        entry.exercise = data.exercise.value  # type: ignore[union-attr]
+    for field in ("date", "sets", "reps", "weight", "notes"):
+        if field in updates:
+            setattr(entry, field, updates[field])
+
     session.commit()
     session.refresh(entry)
     return entry
