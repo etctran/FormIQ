@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from datetime import date as Date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -15,6 +16,19 @@ class ManualEntryCreate(BaseModel):
     date: date
     sets: int = Field(ge=1)
     reps: int = Field(ge=1)
+    weight: float | None = None
+    notes: str | None = None
+
+
+class ManualEntryUpdate(BaseModel):
+    """Partial update for a manual entry — every field optional, only
+    fields explicitly set by the client are applied (see
+    service.update_entry's `exclude_unset=True` usage)."""
+
+    exercise: Exercise | None = None
+    date: Date | None = None
+    sets: int | None = Field(default=None, ge=1)
+    reps: int | None = Field(default=None, ge=1)
     weight: float | None = None
     notes: str | None = None
 
