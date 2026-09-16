@@ -109,4 +109,21 @@ directly). Remaining work:
   needs durable storage across task recycles (Fargate's local disk is
   ephemeral) — an EFS mount or a managed DB, plus access control on the
   unauthenticated `DELETE /history/{id}`.
+
+Other scoped-but-not-started enhancements (no spec/plan yet for any of
+these): fix `created_at`'s timezone handling properly (a `TypeDecorator`
+or Pydantic coercion — the column-flag fix alone doesn't work on SQLite);
+edit existing history entries (currently create+delete only); export
+history (CSV/JSON); a frontend integration test covering analyze→history
+end-to-end; Alembic migrations; trends/progress charts; auth/multi-user
+support (a likely prerequisite for both trends-per-user and the ECS
+deployment's access-control needs).
+
+Lower-priority, parked during the rep-scoring review: row's two dedicated
+fault tests cross-fire each other's fault (target still fires correctly,
+just not cleanly isolated); lunge's `knee_over_toe` uses `max_of` where
+the spec says "working knee" (untested asymmetric case, latent not proven
+broken); several horizontal-offset metrics can't express fault direction
+(unsigned); `landmarks.py` isn't guarded against a malformed short
+(&lt;33) landmark list.
  
