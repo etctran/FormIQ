@@ -46,13 +46,28 @@ Docker, built/released with GitHub Actions.
   reps, weight, no video). DB file at `backend/data/formiq.db`
   (gitignored; `docker-compose.yml` mounts it as a named volume). See
   `docs/superpowers/specs/2026-09-05-workout-history-tracking-design.md`.
+  Manual entries are also editable (`PATCH /history/{id}`, scoped to
+  `source="manual"` only — video entries' derived fields stay
+  read-only) and the whole history is exportable as CSV or JSON
+  (`GET /history/export?format=csv|json`, `/export` deliberately
+  declared before the `/{entry_id}` routes so FastAPI doesn't capture
+  "export" as an int id). `HistoryEntry.created_at` is coerced to a
+  UTC-aware value on read (SQLite drops tzinfo on read-back regardless
+  of the column's `DateTime(timezone=True)` flag) — both the JSON and
+  CSV export paths share this same `HistoryEntry` serialization, so
+  their `created_at` formatting agrees. Alembic is set up
+  (`backend/alembic/`) for future schema migrations, but nothing
+  deploys `alembic upgrade head` yet — local dev/tests still use
+  `init_db()`'s `Base.metadata.create_all()`; see
+  `docs/superpowers/plans/2026-09-15-history-bounded-enhancements.md`.
 - `frontend/` — React + TypeScript, consumes the FastAPI backend. Real
   upload → results UI (not the raw-JSON scaffold): `UploadForm` →
   `AnalyzingView` → `ResultsView` (real client-side video playback via
   `URL.createObjectURL`, color-coded rep timeline, per-rep cards). A
   `'history'` state alongside `idle`/`analyzing`/`results` in `App.tsx`
-  (no router) reaches `HistoryView` (list + delete) and `ManualEntryForm`
-  (log a workout without a video).
+  (no router) reaches `HistoryView` (list, edit, delete, and an
+  "Export CSV" link) and `ManualEntryForm` (log a workout without a
+  video, or edit an existing manual entry in place).
   `ResultsView.tsx` renders `response.reps` directly — the old
   `mockReps.ts` mock-data fallback (used before backend scoring existed)
   has been deleted along with `mockReps.test.ts`, now that backend scoring
@@ -97,7 +112,13 @@ frontend's real upload/results UI are both built and merged. Workout
 history tracking and backend rep-segmentation + form-accuracy scoring are
 also both built and merged — see `backend/` above, including the frontend
 cleanup (`mockReps.ts` deleted, `ResultsView.tsx` reads `response.reps`
-directly). Remaining work:
+directly). A follow-up batch of five bounded history enhancements is also
+built and merged: `created_at`'s timezone handling, editing existing
+manual entries (backend + frontend), CSV/JSON export (backend +
+frontend), Alembic migration tooling, and a frontend analyze→history
+integration test — see `backend/`/`frontend/` above and
+`docs/superpowers/plans/2026-09-15-history-bounded-enhancements.md`.
+Remaining work:
 - A known scoring limitation: `bench_press`/`pullup`'s lockout-completion
   faults use an absolute angle threshold sensitive to a video's actual
   rest angle, not just rep depth — see the rep-scoring spec's
@@ -110,14 +131,9 @@ directly). Remaining work:
   ephemeral) — an EFS mount or a managed DB, plus access control on the
   unauthenticated `DELETE /history/{id}`.
 
-Other scoped-but-not-started enhancements (no spec/plan yet for any of
-these): fix `created_at`'s timezone handling properly (a `TypeDecorator`
-or Pydantic coercion — the column-flag fix alone doesn't work on SQLite);
-edit existing history entries (currently create+delete only); export
-history (CSV/JSON); a frontend integration test covering analyze→history
-end-to-end; Alembic migrations; trends/progress charts; auth/multi-user
-support (a likely prerequisite for both trends-per-user and the ECS
-deployment's access-control needs).
+Other scoped-but-not-started enhancements (no spec/plan yet for either):
+trends/progress charts; auth/multi-user support (a likely prerequisite
+for both trends-per-user and the ECS deployment's access-control needs).
 
 Lower-priority, parked during the rep-scoring review: row's two dedicated
 fault tests cross-fire each other's fault (target still fires correctly,
