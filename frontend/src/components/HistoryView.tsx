@@ -20,6 +20,7 @@ function formatEntry(entry: HistoryEntry): string {
 export function HistoryView() {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   const refetch = useCallback(() => {
     getHistory()
@@ -46,9 +47,15 @@ export function HistoryView() {
     setEntries((prev) => (prev ? [entry, ...prev] : [entry]))
   }
 
+  const handleUpdated = (updated: HistoryEntry) => {
+    setError(null)
+    setEditingId(null)
+    setEntries((prev) => (prev ? prev.map((e) => (e.id === updated.id ? updated : e)) : prev))
+  }
+
   return (
     <div className="history-view">
-      <ManualEntryForm onCreated={handleCreated} />
+      {editingId === null && <ManualEntryForm onSaved={handleCreated} />}
 
       {error && <p className="error">{error}</p>}
       {entries === null && !error && <p className="history-view__loading">Loading history…</p>}
@@ -57,25 +64,45 @@ export function HistoryView() {
       )}
       {entries !== null && entries.length > 0 && (
         <ul className="history-view__list">
-          {entries.map((entry) => (
-            <li key={entry.id} className="history-view__row">
-              <span className="history-view__date">{entry.date}</span>
-              <span className="history-view__exercise">{entry.exercise.replace('_', ' ')}</span>
-              <span className="history-view__detail">
-                {formatEntry(entry)}
-                {entry.source === 'manual' && entry.notes && ` — ${entry.notes}`}
-              </span>
-              <span className="history-view__source">{entry.source}</span>
-              <button
-                type="button"
-                className="history-view__delete"
-                onClick={() => handleDelete(entry.id)}
-                aria-label={`Delete entry from ${entry.date}`}
-              >
-                ×
-              </button>
-            </li>
-          ))}
+          {entries.map((entry) =>
+            editingId === entry.id ? (
+              <li key={entry.id} className="history-view__row history-view__row--editing">
+                <ManualEntryForm
+                  entry={entry}
+                  onSaved={handleUpdated}
+                  onCancel={() => setEditingId(null)}
+                />
+              </li>
+            ) : (
+              <li key={entry.id} className="history-view__row">
+                <span className="history-view__date">{entry.date}</span>
+                <span className="history-view__exercise">{entry.exercise.replace('_', ' ')}</span>
+                <span className="history-view__detail">
+                  {formatEntry(entry)}
+                  {entry.source === 'manual' && entry.notes && ` — ${entry.notes}`}
+                </span>
+                <span className="history-view__source">{entry.source}</span>
+                {entry.source === 'manual' && (
+                  <button
+                    type="button"
+                    className="history-view__edit"
+                    onClick={() => setEditingId(entry.id)}
+                    aria-label={`Edit entry from ${entry.date}`}
+                  >
+                    edit
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="history-view__delete"
+                  onClick={() => handleDelete(entry.id)}
+                  aria-label={`Delete entry from ${entry.date}`}
+                >
+                  ×
+                </button>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </div>

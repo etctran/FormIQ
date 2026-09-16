@@ -124,4 +124,35 @@ describe('HistoryView', () => {
     await waitFor(() => expect(screen.getByText(/failed to delete entry/i)).toBeInTheDocument())
     expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument()
   })
+
+  it('shows an Edit button on manual entries, opens the form pre-filled, and applies the update on save', async () => {
+    const updated = { ...manualEntry, sets: 6 }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [manualEntry, videoEntry] })
+      .mockResolvedValueOnce({ ok: true, json: async () => updated })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByLabelText('Edit entry from 2026-09-01'))
+    expect(screen.getByLabelText('Sets')).toHaveValue(3)
+
+    fireEvent.change(screen.getByLabelText('Sets'), { target: { value: '6' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+    await waitFor(() => expect(screen.getByText('6 × 8 @ 100')).toBeInTheDocument())
+  })
+
+  it('does not show an Edit button on video entries', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [manualEntry, videoEntry] }),
+    )
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+
+    expect(screen.queryByLabelText('Edit entry from 2026-09-02')).not.toBeInTheDocument()
+  })
 })

@@ -61,3 +61,12 @@ export interface ManualEntryCreate {
   weight?: number | null
   notes?: string | null
 }
+
+export interface ManualEntryUpdate {
+  exercise?: Exercise
+  date?: string
+  sets?: number
+  reps?: number
+  weight?: number | null
+  notes?: string | null
+}

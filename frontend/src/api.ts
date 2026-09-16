@@ -1,4 +1,10 @@
-import type { AnalysisResponse, Exercise, HistoryEntry, ManualEntryCreate } from './types'
+import type {
+  AnalysisResponse,
+  Exercise,
+  HistoryEntry,
+  ManualEntryCreate,
+  ManualEntryUpdate,
+} from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -39,6 +45,21 @@ export async function createHistoryEntry(data: ManualEntryCreate): Promise<Histo
   })
   if (!response.ok) {
     throw new Error(`Failed to save entry: ${response.status} ${response.statusText}`)
+  }
+  return (await response.json()) as HistoryEntry
+}
+
+export async function updateHistoryEntry(
+  id: number,
+  data: ManualEntryUpdate,
+): Promise<HistoryEntry> {
+  const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to update entry: ${response.status} ${response.statusText}`)
   }
   return (await response.json()) as HistoryEntry
 }

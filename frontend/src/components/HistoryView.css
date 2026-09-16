@@ -59,3 +59,19 @@
 .history-view__delete:hover {
   color: var(--danger);
 }
+
+.history-view__row--editing {
+  display: block;
+}
+
+.history-view__edit {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.history-view__edit:hover {
+  color: var(--accent-cyan);
+}

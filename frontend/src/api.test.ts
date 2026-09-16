@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createHistoryEntry, deleteHistoryEntry, getHistory } from './api'
+import { createHistoryEntry, deleteHistoryEntry, getHistory, updateHistoryEntry } from './api'
 import type { HistoryEntry, ManualEntryCreate } from './types'
 
 const sampleEntry: HistoryEntry = {
@@ -59,6 +59,30 @@ describe('createHistoryEntry', () => {
     await expect(
       createHistoryEntry({ exercise: 'squat', date: '2026-09-01', sets: 3, reps: 8 }),
     ).rejects.toThrow('Failed to save entry')
+  })
+})
+
+describe('updateHistoryEntry', () => {
+  it('sends a PATCH with only the provided fields', async () => {
+    const updated = { ...sampleEntry, sets: 5 }
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => updated })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await updateHistoryEntry(1, { sets: 5 })
+
+    expect(result).toEqual(updated)
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/history/1'),
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ sets: 5 }) }),
+    )
+  })
+
+  it('throws when the response is not ok', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 400, statusText: 'Bad Request' }),
+    )
+    await expect(updateHistoryEntry(1, { sets: 5 })).rejects.toThrow('Failed to update entry')
   })
 })
 
