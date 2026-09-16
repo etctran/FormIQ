@@ -1,0 +1,15 @@
+Workout history database migrations.
+
+Local dev/tests still use `init_db()`'s `Base.metadata.create_all()` (see
+`app/history/database.py`) — this Alembic setup is for reviewable schema
+migrations going forward. No deployment currently runs `alembic upgrade head`
+automatically (tracked as part of the AWS ECS deployment sub-project).
+
+To create a new migration after schema changes:
+  alembic revision --autogenerate -m "description"
+
+To apply migrations:
+  alembic upgrade head
+
+To rollback migrations:
+  alembic downgrade base
