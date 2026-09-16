@@ -155,4 +155,16 @@ describe('HistoryView', () => {
 
     expect(screen.queryByLabelText('Edit entry from 2026-09-02')).not.toBeInTheDocument()
   })
+
+  it('renders an export link pointing at the backend export endpoint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [manualEntry, videoEntry] }),
+    )
+    render(<HistoryView />)
+    await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
+
+    const link = screen.getByRole('link', { name: /export csv/i })
+    expect(link).toHaveAttribute('href', expect.stringContaining('/history/export'))
+  })
 })

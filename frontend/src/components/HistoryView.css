@@ -75,3 +75,14 @@
 .history-view__edit:hover {
   color: var(--accent-cyan);
 }
+
+.history-view__export {
+  align-self: flex-start;
+  color: var(--accent-cyan);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.history-view__export:hover {
+  text-decoration: underline;
+}
