@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from datetime import date as Date
+from datetime import date as Date  # see comment on ManualEntryUpdate.date below
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -23,7 +23,15 @@ class ManualEntryCreate(BaseModel):
 class ManualEntryUpdate(BaseModel):
     """Partial update for a manual entry — every field optional, only
     fields explicitly set by the client are applied (see
-    service.update_entry's `exclude_unset=True` usage)."""
+    service.update_entry's `exclude_unset=True` usage).
+
+    Note: the `date` field below is typed with the `Date` alias, not the
+    bare `date` type. A field named `date` with a default value creates a
+    class-level `date = None` attribute that shadows the imported `date`
+    type when Pydantic resolves this file's postponed
+    (`from __future__ import annotations`) annotations — removing this
+    alias would silently break `date | None` into `None | None` and raise
+    a TypeError at class-definition time."""
 
     exercise: Exercise | None = None
     date: Date | None = None

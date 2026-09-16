@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.history.models import WorkoutEntry
-from app.history.schemas import ManualEntryCreate, ManualEntryUpdate
+from app.history.schemas import HistoryEntry, ManualEntryCreate, ManualEntryUpdate
 from app.schemas.analysis import AnalysisResponse, Exercise
 
 
@@ -103,5 +103,6 @@ def entries_to_csv(entries: list[WorkoutEntry]) -> str:
     writer = csv.writer(buffer)
     writer.writerow(_CSV_FIELDS)
     for entry in entries:
-        writer.writerow([getattr(entry, field) for field in _CSV_FIELDS])
+        values = HistoryEntry.model_validate(entry).model_dump(mode="json")
+        writer.writerow([values[field] for field in _CSV_FIELDS])
     return buffer.getvalue()

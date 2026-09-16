@@ -27,6 +27,9 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
+# ALEMBIC_DB_PATH lets tests/scratch-DB verification point Alembic at a
+# different file without editing alembic.ini; unset, it defaults to the
+# same file the app's own init_db() uses.
 db_path = os.environ.get("ALEMBIC_DB_PATH", DEFAULT_DB_PATH)
 config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
