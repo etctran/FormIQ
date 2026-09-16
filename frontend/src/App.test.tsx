@@ -180,4 +180,57 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New Analysis' }))
     expect(screen.getByLabelText(/drop a video/i)).toBeInTheDocument()
   })
+
+  it('shows a newly-analyzed video as a history entry after switching to History', async () => {
+    const historyEntry = {
+      id: 1,
+      exercise: 'squat',
+      date: '2026-09-15',
+      source: 'video',
+      created_at: '2026-09-15T12:00:00Z',
+      sets: null,
+      reps: null,
+      weight: null,
+      notes: null,
+      rep_count: 3,
+      avg_form_accuracy: 0.9,
+      rep_scores: mockAnalysisResponse.reps,
+    }
+
+    let historyEntries: typeof historyEntry[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (typeof url === 'string' && url.includes('/analyze/')) {
+          // Simulate the backend auto-logging a history entry as a side
+          // effect of a successful analysis, the same way the real
+          // /analyze route does.
+          historyEntries = [historyEntry]
+          return Promise.resolve({ ok: true, json: async () => mockAnalysisResponse })
+        }
+        if (typeof url === 'string' && url.includes('/history') && (!init || init.method === undefined)) {
+          return Promise.resolve({ ok: true, json: async () => historyEntries })
+        }
+        return Promise.resolve({ ok: true, json: async () => true })
+      }),
+    )
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(/Backend: online/)).toBeInTheDocument())
+
+    const file = new File(['fake video content'], 'clip.mp4', { type: 'video/mp4' })
+    const input = screen.getByLabelText(/drop a video/i)
+    fireEvent.change(input, { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('button', { name: /^analyze$/i }))
+
+    await screen.findByText(/Analyzing your squat set/i)
+    const video = await screen.findByTestId('results-video')
+    Object.defineProperty(video, 'duration', { configurable: true, value: 12 })
+    fireEvent.loadedMetadata(video)
+    await screen.findAllByText(/^Rep \d/)
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+
+    await screen.findByText(/3 reps/)
+  })
 })
