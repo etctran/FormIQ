@@ -15,6 +15,7 @@ backend/data/*.db
 
 # Secrets
 .env
+.env.local
 !.env.example
 
 # OS

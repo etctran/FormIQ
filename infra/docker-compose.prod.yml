@@ -1,0 +1,21 @@
+# Backend only, on one host with a durable EBS-backed bind mount.
+# The image is built and pushed by .github/workflows/deploy.yml — never
+# built here: compiling cv-engine + LiteRT from source needs more RAM
+# than a small instance has.
+#
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Expects a .env alongside it holding IMAGE and FORMIQ_API_KEY.
+
+services:
+  backend:
+    image: ${IMAGE}
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      FORMIQ_DB_PATH: /data/formiq.db
+      FORMIQ_API_KEY: ${FORMIQ_API_KEY:?set FORMIQ_API_KEY in .env}
+    volumes:
+      - /opt/formiq/data:/data
