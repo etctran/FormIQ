@@ -1,4 +1,4 @@
-# Deploying the FormIQ backend (beginner guide)
+# Deploying the FormIQ backend on AWS (free tier, beginner guide)
 
 Written for someone who has never deployed on AWS. Every command is
 copy-pasteable. Design rationale lives in
@@ -10,10 +10,44 @@ restarts. The React frontend keeps running on your laptop and talks to
 that server. The frontend is deliberately *not* deployed — see "Why the
 frontend stays local" at the bottom.
 
-**Roughly how long:** 45–60 minutes the first time, most of it waiting.
+**Roughly how long:** about an hour the first time, most of it waiting.
 
-**What it costs:** about **$12/month**, fixed. Step 1 sets up a safety net
-so it cannot surprise you.
+**What it costs:** $0 for 12 months on a new AWS account, if you stay
+inside the limits this guide sticks to. Read "The free tier, honestly"
+next — that section is the whole point of this version.
+
+---
+
+## The free tier, honestly
+
+A new AWS account gets, for **12 months from signup**:
+
+- **750 hours/month of a `t3.micro` instance** — enough to run one
+  continuously, all month.
+- **30 GB of EBS disk** (we use 20).
+- **750 hours/month of a public IPv4 address** — which matters, because
+  AWS charges for public IPv4 addresses (~$3.60/month) once that runs out.
+- 100 GB/month of outbound data transfer, far more than you'll use.
+
+Two things to be clear-eyed about:
+
+1. **After 12 months this instance costs roughly $11–12/month** (instance +
+   IPv4 + disk). It does not stop or warn you; it starts billing. Put a
+   calendar reminder at 11 months to delete it or decide to pay.
+2. **AWS has been reworking the free tier.** Newer accounts may instead get
+   signup credits with an expiry rather than the classic 12-month
+   allowances. I can't see which applies to your account. Check
+   <https://aws.amazon.com/free> and trust the console's green **"Free tier
+   eligible"** label over anything written here.
+
+**The real constraint: `t3.micro` has 1 GB of RAM.** Your ingestion path
+decodes video with OpenCV and runs two LiteRT pose models, which is a tight
+fit. Step 7 adds a swap file so the kernel pages to disk instead of killing
+the process. It's slower than real RAM, but it means analysis completes
+rather than dying. If it's too slow to tolerate, the fix is a paid
+instance with 2 GB.
+
+Step 1's budget alarm is not optional. Free tiers end quietly.
 
 ---
 
@@ -32,100 +66,117 @@ Now open <https://github.com/etctran/FormIQ/actions>. A workflow called
 you do the next steps.
 
 > If it fails, stop and fix that first. Nothing below works without an
-> image. The most common cause is a build error in `cv-engine`.
+> image. The most likely cause is a build error in `cv-engine`.
 
 ---
 
 ## Step 1 — Protect yourself from a surprise bill
 
-Do this before creating anything. AWS will happily let you spend money by
-accident, and every beginner horror story starts here.
+Do this before creating anything.
 
 1. Sign in at <https://console.aws.amazon.com>.
 2. Search the top bar for **Billing and Cost Management** → open it.
-3. In the left sidebar: **Budgets** → **Create budget**.
+3. Sidebar: **Budgets** → **Create budget**.
 4. Choose **Use a template (simplified)** → **Monthly cost budget**.
-5. Set the amount to **20** (dollars), enter your email, and create it.
+5. Amount **5** (dollars), enter your email, create it.
 
-You will now get an email if you ever approach $20/month. The setup below
-should sit around $12.
+Five, not twenty: if you're inside the free tier you should be at or near
+$0, so any real charge means something's misconfigured and you want to hear
+about it immediately.
 
 ---
 
-## Step 2 — Create the server (Lightsail)
+## Step 2 — Launch the server
 
-Lightsail is AWS's beginner-friendly server product. Same machines as EC2,
-but one fixed monthly price and far fewer decisions.
+1. Go to <https://console.aws.amazon.com/ec2>.
+2. **Top-right: check your region** (e.g. "N. Virginia"). Pick one near you
+   and remember it — EC2 resources are per-region, and a common beginner
+   confusion is "my instance vanished" when the console is just showing a
+   different region.
+3. Click the orange **Launch instance**.
 
-1. Go to <https://lightsail.aws.amazon.com>.
-2. Click **Create instance**.
-3. **Region:** pick the one closest to you (e.g. `us-east-1` Virginia,
-   `us-west-2` Oregon). Don't overthink it; you can't change it later
-   without rebuilding.
-4. **Platform:** Linux/Unix.
-5. **Blueprint:** choose **OS Only** → **Ubuntu 24.04 LTS**.
-   *Not* one of the app blueprints — you want a plain machine.
-6. **Instance plan:** choose the **$12/month** one (2 GB RAM, 2 vCPUs,
-   60 GB SSD). The cheapest plan has too little memory for video
-   processing. If video analysis later dies with "killed" or an
-   out-of-memory error in the logs, upgrade to the $24 plan (4 GB) —
-   Lightsail can resize from a snapshot.
+Then, working down the form:
 
-   *(Plan names and prices are what Lightsail offered as of writing;
-   check the page for current numbers.)*
-7. **Name:** `formiq-backend`.
-8. Click **Create instance**. It takes a minute or two to say "Running".
+- **Name:** `formiq-backend`
+- **Application and OS Images:** select **Ubuntu**, then choose
+  **Ubuntu Server 24.04 LTS**. Confirm it shows a green
+  **"Free tier eligible"** tag.
+- **Instance type:** `t3.micro` — it should also be tagged **"Free tier
+  eligible"**. If it isn't in your region, `t2.micro` will be; take
+  whichever carries the label.
+- **Key pair (login):** click **Create new key pair**. Name it
+  `formiq-key`, type **RSA**, format **.pem**. It downloads once — keep it
+  somewhere you won't lose it. You'll mostly use browser SSH instead
+  (Step 5), but you need a key pair to launch and it's your fallback.
+- **Network settings** → click **Edit**, then:
+  - **Allow SSH traffic from** → choose **My IP** (not "Anywhere").
+  - Click **Add security group rule**:
+    - Type **Custom TCP**, **Port range** `8000`, **Source type** **My IP**.
+  - This is your firewall. Port 22 to let you in, port 8000 for the API,
+    both restricted to your own address.
+- **Configure storage:** change `8` GiB to **20** GiB, type **gp3**. Still
+  well inside the 30 GB free allowance, and 8 GiB is uncomfortably tight
+  once the image is pulled.
 
-The 60 GB SSD is what makes your database durable — it's a real disk
-attached to the instance, not temporary scratch space.
+Click **Launch instance**, then **View all instances**. Wait until
+**Instance state** is "Running" and **Status check** passes (a minute or
+two).
 
 ---
 
 ## Step 3 — Give it an address that doesn't change
 
-By default the server's IP address changes every time it restarts, which
-would break your frontend config.
+By default the public IP changes every time the instance stops and starts,
+which would break your frontend config.
 
-1. In Lightsail, open the **Networking** tab (top of the page, not inside
-   the instance).
-2. **Create static IP**.
-3. Attach it to `formiq-backend`, name it `formiq-ip`, click **Create**.
+1. EC2 sidebar → **Elastic IPs** (under Network & Security).
+2. **Allocate Elastic IP address** → **Allocate**.
+3. Select it → **Actions** → **Associate Elastic IP address**.
+4. Choose your `formiq-backend` instance → **Associate**.
 
-**Write this IP address down.** It's referred to below as `<YOUR-IP>`.
-Static IPs are free while attached to a running instance.
+**Write this address down.** It's `<YOUR-IP>` below.
+
+> An Elastic IP is free **only while attached to a running instance**. If
+> you later stop or delete the instance but keep the address, it starts
+> costing money. Release it when you're done (Step 12).
 
 ---
 
-## Step 4 — Open the right port, to only you
+## Step 4 — Confirm the firewall
 
-Your API should be reachable by you and nobody else.
+You set this during launch; this is just the place to fix it later.
 
-First find your own IP: visit <https://checkip.amazonaws.com> and note
-the number.
+EC2 → **Instances** → select yours → **Security** tab → click the security
+group → **Inbound rules**. You should see SSH (22) and Custom TCP (8000),
+each with your own IP as the source.
 
-1. In Lightsail, click your instance → **Networking** tab.
-2. Under **IPv4 Firewall**, click **Add rule**.
-3. **Application:** Custom · **Protocol:** TCP · **Port:** `8000`.
-4. Tick **Restrict to IP address** and enter the IP from
-   checkip.amazonaws.com, followed by `/32`
-   (for example `203.0.113.7/32` — the `/32` means "exactly this one
-   address").
-5. **Create**.
-
-Leave the existing SSH rule (port 22) alone.
-
-> **Home internet IPs change.** If the API stops responding in a few days
-> with a timeout, re-check checkip.amazonaws.com and update this rule.
-> That's the usual cause, not a broken server.
+> **Home internet IPs change.** If the API starts timing out after a few
+> days, this is almost always why — not a broken server. Get your current
+> address from <https://checkip.amazonaws.com>, then **Edit inbound rules**
+> and update both entries (or re-pick **My IP**).
 
 ---
 
 ## Step 5 — Connect to the server
 
-In Lightsail, click your instance → the orange **Connect using SSH**
-button. A terminal opens in your browser. No keys, no config.
+EC2 → **Instances** → select yours → **Connect** button → **EC2 Instance
+Connect** tab → **Connect**. A terminal opens in your browser. No key file
+needed.
 
-Everything in Steps 6–9 is typed into that browser terminal.
+<details>
+<summary>If EC2 Instance Connect doesn't work, use the key file</summary>
+
+From your laptop's terminal, in the folder holding `formiq-key.pem`:
+
+```sh
+chmod 400 formiq-key.pem
+ssh -i formiq-key.pem ubuntu@<YOUR-IP>
+```
+
+`chmod 400` is required — SSH refuses keys that other users could read.
+</details>
+
+Everything in Steps 6–9 is typed into that server terminal.
 
 ---
 
@@ -137,8 +188,8 @@ sudo apt-get install -y docker.io docker-compose-v2
 sudo usermod -aG docker "$USER"
 ```
 
-Now **close the browser terminal tab and reconnect** (the Connect button
-again). The last command only takes effect on a fresh login. Verify:
+Now **disconnect and reconnect** (close the tab, hit Connect again). The
+last command only takes effect on a fresh login. Verify:
 
 ```sh
 docker ps
@@ -149,18 +200,42 @@ reconnect.
 
 ---
 
-## Step 7 — Let the server download your image
+## Step 7 — Add swap (the 1 GB workaround)
+
+This is the step that makes a free-tier instance viable for video
+processing. Without it, analysing a video can get the process killed
+outright.
+
+```sh
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+The last line makes it survive reboots. Check it:
+
+```sh
+free -h
+```
+
+You should see a `Swap:` row showing 2.0Gi. Now the machine has 1 GB of
+real memory plus 2 GB of slower disk-backed overflow.
+
+---
+
+## Step 8 — Let the server download your image
 
 GitHub Container Registry images are private by default, so the server
 needs read permission.
 
 **On your laptop:** create a token at
 <https://github.com/settings/tokens> → **Generate new token (classic)**.
-Name it `formiq-server`, set expiry to 90 days, and tick **only**
-`read:packages`. Generate it and copy the `ghp_...` string — GitHub shows
-it once.
+Name it `formiq-server`, expiry 90 days, tick **only** `read:packages`.
+Generate and copy the `ghp_...` string — GitHub shows it once.
 
-**Back in the server terminal**, replacing the token:
+**In the server terminal**, with your token pasted in:
 
 ```sh
 echo 'ghp_YOUR_TOKEN_HERE' | docker login ghcr.io -u etctran --password-stdin
@@ -170,10 +245,7 @@ Expect `Login Succeeded`.
 
 ---
 
-## Step 8 — Create the config
-
-Still on the server. This makes the folder your database lives in, a
-secret key, and the file describing how to run the container.
+## Step 9 — Create the config
 
 ```sh
 sudo mkdir -p /opt/formiq/data
@@ -181,7 +253,7 @@ sudo chown -R "$USER" /opt/formiq
 cd /opt/formiq
 ```
 
-Generate a random password for your API and save it into the config:
+Generate a random password for your API and save it:
 
 ```sh
 KEY=$(openssl rand -hex 32)
@@ -192,10 +264,10 @@ EOF
 cat .env
 ```
 
-**Copy the `FORMIQ_API_KEY` value that prints out** — your laptop needs
-the identical string in Step 11.
+**Copy the `FORMIQ_API_KEY` value that prints** — your laptop needs the
+identical string in Step 11.
 
-Now the compose file (this mirrors `infra/docker-compose.prod.yml`):
+Now the compose file (mirrors `infra/docker-compose.prod.yml`):
 
 ```sh
 cat > docker-compose.prod.yml <<'EOF'
@@ -214,18 +286,18 @@ EOF
 ```
 
 Two lines there are the whole durability story: `FORMIQ_DB_PATH` puts the
-database at `/data/formiq.db` inside the container, and the `volumes` line
-makes `/data` actually be `/opt/formiq/data` on the SSD. Delete and
-recreate the container all you like — the database is outside it.
+database at `/data/formiq.db` inside the container, and `volumes` makes
+`/data` actually be `/opt/formiq/data` on the real disk. Destroy and
+recreate the container freely — the database is outside it.
 
-`restart: unless-stopped` means the container comes back by itself if the
-server reboots.
+`restart: unless-stopped` brings the container back by itself after a
+reboot.
 
 ---
 
-## Step 9 — Start it
+## Step 10 — Start it
 
-Check the GitHub Actions run from Step 0 finished green first, then:
+Check the GitHub Actions run from Step 0 finished green, then:
 
 ```sh
 cd /opt/formiq
@@ -233,15 +305,14 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-The pull downloads a large image — a few minutes. Then:
+The pull downloads a large image — several minutes on a small instance.
+Then:
 
 ```sh
 curl -f http://localhost:8000/health
 ```
 
-Expect `{"status":"ok"}`.
-
-If something's wrong, read the logs — they say why:
+Expect `{"status":"ok"}`. If not, the logs say why:
 
 ```sh
 docker compose -f docker-compose.prod.yml logs
@@ -249,9 +320,9 @@ docker compose -f docker-compose.prod.yml logs
 
 ---
 
-## Step 10 — Check it from your laptop
+## Step 11 — Check it from your laptop
 
-On **your own machine**, replacing `<YOUR-IP>` and `<YOUR-KEY>`:
+On **your own machine**, substituting your values:
 
 ```sh
 # 1. Health check needs no key — proves the server is reachable
@@ -267,31 +338,31 @@ curl -H "X-API-Key: <YOUR-KEY>" http://<YOUR-IP>:8000/history
 Expected: `{"status":"ok"}`, then `401`, then `[]` (or your entries).
 
 Reading failures:
-- **All three hang/time out** → firewall. Step 4, and re-check your IP.
-- **#2 returns `200` instead of `401`** → `FORMIQ_API_KEY` didn't reach the
-  container. Check `.env`, then `docker compose ... up -d` again.
-- **#3 returns `401`** → the key on your laptop doesn't match the server's.
+
+- **All three hang** → firewall or region. Step 4, and re-check your IP.
+- **#2 returns `200`** → `FORMIQ_API_KEY` never reached the container.
+  Check `.env`, then re-run `up -d`.
+- **#3 returns `401`** → your laptop's key doesn't match the server's.
   Re-read it with `cat /opt/formiq/.env`.
+- **Analysis requests die or the container restarts** → memory. Confirm
+  swap is on with `free -h` (Step 7), and watch it with
+  `docker stats` during an upload.
 
----
-
-## Step 11 — Point the frontend at it
-
-On your laptop, create `frontend/.env.local` (gitignored, never committed):
+Then point the frontend at it: create `frontend/.env.local` on your laptop
+(gitignored, never committed):
 
 ```
 VITE_API_BASE_URL=http://<YOUR-IP>:8000
 VITE_API_KEY=<YOUR-KEY>
 ```
 
-Then `npm run dev` from `frontend/` as usual. Uploading a video now sends
-it to the server instead of localhost.
+Run `npm run dev` from `frontend/` as usual. Uploads now go to the server.
 
 ---
 
 ## Deploying again later
 
-Every push to `main` rebuilds the image automatically. To pick it up:
+Every push to `main` rebuilds the image. To pick it up:
 
 ```sh
 cd /opt/formiq
@@ -299,43 +370,50 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-A few seconds of downtime. Your database is untouched — it's on the SSD,
+A few seconds of downtime. The database is untouched — it's on the disk,
 not in the container.
 
 ---
 
-## Stopping the bill
+## Step 12 — Shutting it down
 
-Lightsail charges for an instance whether or not it's busy. **Stopping an
-instance does not stop charges** — only deleting does.
-
-To pause cheaply: Lightsail → instance → **Stop**. You still pay.
-To stop paying: **delete the instance**, and delete the static IP from the
-Networking tab (an unattached static IP costs money).
-
-Before deleting, save your data:
+Back up first:
 
 ```sh
-# on the server
 sudo apt-get install -y sqlite3    # not installed by default
 sqlite3 /opt/formiq/data/formiq.db ".backup /tmp/backup.db"
 ```
 
-then download `/tmp/backup.db` via the Lightsail browser terminal's
-download button.
+Copy `/tmp/backup.db` to your laptop:
+
+```sh
+# from your laptop
+scp -i formiq-key.pem ubuntu@<YOUR-IP>:/tmp/backup.db .
+```
+
+Then, to stop all charges, do **both**:
+
+1. EC2 → **Instances** → select → **Instance state** → **Terminate**.
+   (*Stop* keeps the disk and keeps billing for it. *Terminate* deletes it.)
+2. EC2 → **Elastic IPs** → select → **Actions** → **Release**. An
+   unattached Elastic IP is billed.
+
+Leaving the Elastic IP behind is the single most common way people keep
+paying AWS for a project they thought they deleted.
 
 ---
 
 ## Backups
 
-Not automated. Simplest option is a Lightsail **automatic snapshot**
-(instance → Snapshots → enable), which costs a little extra and captures
-the whole disk daily.
+Not automated. The `.backup` command above on a cron is the simple option:
 
-A snapshot of a live SQLite file can in principle catch it mid-write. For
-one user who isn't uploading during the snapshot window this is a
-non-issue; if it ever matters, use the `.backup` command above on a cron
-and let snapshots capture that file instead.
+```sh
+# once a day at 3am, keeping the last 7
+(crontab -l 2>/dev/null; echo '0 3 * * * sqlite3 /opt/formiq/data/formiq.db ".backup /opt/formiq/data/backup-$(date +\%u).db"') | crontab -
+```
+
+Use `.backup` rather than copying the file — it's safe against a write
+happening mid-copy.
 
 ---
 
@@ -343,22 +421,29 @@ and let snapshots capture that file instead.
 
 Vite bakes `VITE_*` values into the JavaScript bundle at build time. A
 publicly served frontend would therefore ship `VITE_API_KEY` in plain text
-to anyone who loaded the page, and the API guard would be pointless.
-Serving it properly needs real login accounts, a domain and HTTPS — a much
-bigger project. Running `npm run dev` locally costs nothing and keeps the
-key on your machine.
+to anyone who loaded the page, making the API guard pointless. Serving it
+properly needs real login accounts, a domain and HTTPS — a much bigger
+project. Running `npm run dev` locally costs nothing and keeps the key on
+your machine.
 
 ---
 
 ## Glossary
 
-- **Image** — a frozen snapshot of your app and everything it needs to run.
-  Built by GitHub Actions, downloaded by the server.
+- **EC2** — AWS's virtual servers. An "instance" is one server.
+- **AMI** — the OS image an instance starts from (here: Ubuntu 24.04).
+- **`t3.micro`** — the instance size. 2 vCPUs, 1 GB RAM, free-tier eligible.
+- **Security group** — a firewall attached to your instance. Inbound rules
+  say who may connect to which port.
+- **Elastic IP** — an address that stays the same across stop/start.
+- **EBS** — the virtual hard disk attached to the instance. Persists
+  independently of the container; this is where your database lives.
+- **Swap** — disk space used as overflow when RAM runs out. Slow, but
+  prevents processes being killed.
+- **Image** — a frozen snapshot of your app and its dependencies, built by
+  GitHub Actions and downloaded by the server.
 - **Container** — a running copy of an image. Disposable; anything written
-  inside it vanishes when it's replaced, which is why the database lives on
-  a mounted volume instead.
-- **Volume / bind mount** — a folder on the server's real disk made visible
-  inside the container. How data survives.
+  inside it vanishes when replaced, which is why the database is on a
+  mounted volume.
 - **GHCR** — GitHub Container Registry, where your built images are stored.
-- **Static IP** — an address that stays the same across restarts.
-- **`/32`** — in a firewall rule, "exactly this one IP address".
+- **`My IP` / `/32`** — in a firewall rule, "exactly my one address".

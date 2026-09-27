@@ -51,7 +51,7 @@ laptop: npm run dev (localhost:5173)
    |  VITE_API_BASE_URL=http://<box-ip>:8000
    |  VITE_API_KEY=<secret>          .env.local, gitignored
    v
-box (EC2/Lightsail, EBS root volume)
+box (EC2 t3.micro, EBS root volume, 2 GB swap)
    docker compose -f docker-compose.prod.yml up -d
    backend container  :8000
      FORMIQ_DB_PATH=/data/formiq.db
@@ -106,6 +106,19 @@ become a deploy step.
 - Existing suites cover the DB-path change implicitly: they already build
   their own engines via `build_engine(tmp_path / ...)`, so only the
   module-level default is affected.
+
+## Instance sizing
+
+Target is a free-tier `t3.micro` (1 GB RAM) for the first 12 months. That
+is below what OpenCV decode plus two LiteRT models comfortably want, so a
+2 GB swap file is part of the provisioning: the kernel pages to disk
+instead of OOM-killing the analysis. Slower per request, but it completes.
+The upgrade path if that latency stops being tolerable is a 2 GB paid
+instance, no application change.
+
+Note the 12-month cliff: the instance, its public IPv4 address and its
+EBS volume all start billing (~$11–12/month combined) when the free tier
+lapses, silently.
 
 ## Manual steps (not automated, deliberately)
 
