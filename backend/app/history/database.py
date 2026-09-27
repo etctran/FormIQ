@@ -6,11 +6,14 @@ DEFAULT_DB_PATH is computed relative to this file so it resolves
 correctly both locally (backend/data/formiq.db) and inside the Docker
 image, where backend/app is copied to /app/app (three parents up from
 here is /app, giving /app/data/formiq.db — see
-infra/docker/backend.Dockerfile).
+infra/docker/backend.Dockerfile). FORMIQ_DB_PATH overrides it, which is
+how deployments point the DB at a mounted volume instead of the
+container's ephemeral disk.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Generator
 from pathlib import Path
 
@@ -18,6 +21,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "formiq.db"
+DB_PATH = Path(os.environ.get("FORMIQ_DB_PATH") or DEFAULT_DB_PATH)
 
 
 class Base(DeclarativeBase):
@@ -32,7 +36,7 @@ def build_engine(db_path: Path) -> Engine:
     return create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
 
 
-engine = build_engine(DEFAULT_DB_PATH)
+engine = build_engine(DB_PATH)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
