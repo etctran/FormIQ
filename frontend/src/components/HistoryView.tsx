@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { API_BASE_URL, deleteHistoryEntry, getHistory } from '../api'
+import { deleteHistoryEntry, downloadExport, getHistory } from '../api'
 import type { HistoryEntry } from '../types'
 import { ManualEntryForm } from './ManualEntryForm'
 import './HistoryView.css'
@@ -56,13 +56,17 @@ export function HistoryView() {
   return (
     <div className="history-view">
       {editingId === null && <ManualEntryForm onSaved={handleCreated} />}
-      <a
+      <button
+        type="button"
         className="history-view__export"
-        href={`${API_BASE_URL}/history/export`}
-        download="workout_history.csv"
+        onClick={() => {
+          downloadExport('csv').catch((err: unknown) =>
+            setError(err instanceof Error ? err.message : 'Failed to export history'),
+          )
+        }}
       >
         Export CSV
-      </a>
+      </button>
 
       {error && <p className="error">{error}</p>}
       {entries === null && !error && <p className="history-view__loading">Loading history…</p>}

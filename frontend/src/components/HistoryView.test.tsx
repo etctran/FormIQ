@@ -156,15 +156,27 @@ describe('HistoryView', () => {
     expect(screen.queryByLabelText('Edit entry from 2026-09-02')).not.toBeInTheDocument()
   })
 
-  it('renders an export link pointing at the backend export endpoint', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => [manualEntry, videoEntry] }),
-    )
+  it('fetches the export and hands the browser a download', async () => {
+    const blob = new Blob(['exercise,date\n'], { type: 'text/csv' })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [manualEntry, videoEntry],
+      blob: async () => blob,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('URL', { ...URL, createObjectURL: () => 'blob:x', revokeObjectURL: () => {} })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
     render(<HistoryView />)
     await waitFor(() => expect(screen.getByText('3 × 8 @ 100')).toBeInTheDocument())
 
-    const link = screen.getByRole('link', { name: /export csv/i })
-    expect(link).toHaveAttribute('href', expect.stringContaining('/history/export'))
+    fireEvent.click(screen.getByRole('button', { name: /export csv/i }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/history/export?format=csv'),
+      expect.anything(),
+    )
+    click.mockRestore()
   })
 })
