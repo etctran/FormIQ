@@ -11,6 +11,7 @@ from app.history.database import get_session
 from app.schemas.analysis import AnalysisResponse, Exercise
 from app.schemas.keypoint import Frame as FrameSchema
 from app.scoring import pipeline as scoring_pipeline
+from app.security import require_api_key
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -21,7 +22,11 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.post("/analyze/{exercise}", response_model=AnalysisResponse)
+@router.post(
+    "/analyze/{exercise}",
+    response_model=AnalysisResponse,
+    dependencies=[Depends(require_api_key)],
+)
 async def analyze(
     exercise: Exercise, video: UploadFile, session: Session = Depends(get_session)
 ) -> AnalysisResponse:

@@ -14,8 +14,11 @@ from app.history import service
 from app.history.database import get_session
 from app.history.models import WorkoutEntry
 from app.history.schemas import HistoryEntry, ManualEntryCreate, ManualEntryUpdate
+from app.security import require_api_key
 
-router = APIRouter(prefix="/history", tags=["history"])
+router = APIRouter(
+    prefix="/history", tags=["history"], dependencies=[Depends(require_api_key)]
+)
 
 
 @router.post("", response_model=HistoryEntry, status_code=201)
