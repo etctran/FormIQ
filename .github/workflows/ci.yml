@@ -4,10 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes the in-flight run obsolete, and
+# these runs are expensive (LiteRT compiles from source).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   cv-engine:
     runs-on: ubuntu-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -16,12 +25,24 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libopencv-dev
+          sudo apt-get install -y cmake ninja-build libopencv-dev ccache
+      # LiteRT is ~10 min of compilation from source on a cold runner.
+      # ccache is keyed on compiler input, so it survives across jobs and
+      # runs; only genuinely changed translation units get recompiled.
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
       - name: Install pybind11
         run: pip install --user pybind11
       - name: Configure
         run: |
           cmake -S cv-engine -B cv-engine/build -GNinja \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir)
       - name: Build
         run: cmake --build cv-engine/build
@@ -30,17 +51,35 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build libopencv-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libopencv-dev ccache
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
       - uses: astral-sh/setup-uv@v3
+      # --locked, not --frozen: --frozen installs whatever the lockfile
+      # says without checking it against pyproject.toml, which is how a
+      # declared dependency (alembic) sat unlocked and uninstalled
+      # without any job failing. --locked fails the build instead.
       - name: Sync
         working-directory: backend
-        run: uv sync --frozen
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+        run: uv sync --locked
       - name: Lint
         working-directory: backend
         run: uv run ruff check .
@@ -69,3 +108,37 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  # Built on every run so a broken Dockerfile fails the PR that broke it,
+  # but only pushed from green main — an image tagged :latest is
+  # therefore always one that passed the full suite.
+  image:
+    needs: [cv-engine, backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/backend.Dockerfile
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

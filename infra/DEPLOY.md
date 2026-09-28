@@ -60,13 +60,19 @@ That can't happen until your commits are on GitHub.
 git push origin main
 ```
 
-Now open <https://github.com/etctran/FormIQ/actions>. A workflow called
-**"Build backend image"** should be running. **It will take 10–20 minutes**
-— it compiles the C++ pose engine and LiteRT from source. Let it run while
-you do the next steps.
+Now open <https://github.com/etctran/FormIQ/actions>. The **CI**
+workflow should be running. **The first run takes 15–25 minutes** — it
+compiles the C++ pose engine and LiteRT from source. Later runs are much
+faster, because the compiler cache is reused. Let it run while you do the
+next steps.
 
-> If it fails, stop and fix that first. Nothing below works without an
-> image. The most likely cause is a build error in `cv-engine`.
+The run has four jobs. `cv-engine`, `backend` and `frontend` are tests;
+`image` builds and publishes the thing your server downloads, and it only
+runs if all three test jobs pass. So **if CI is red, no new image is
+published** — your server keeps running the last good one.
+
+> If it fails, stop and fix that first. Nothing below works until there's
+> an image. The most likely cause is a build error in `cv-engine`.
 
 ---
 
@@ -362,7 +368,8 @@ Run `npm run dev` from `frontend/` as usual. Uploads now go to the server.
 
 ## Deploying again later
 
-Every push to `main` rebuilds the image. To pick it up:
+Every push to `main` runs the tests and, if they pass, rebuilds the
+image. To pick it up:
 
 ```sh
 cd /opt/formiq

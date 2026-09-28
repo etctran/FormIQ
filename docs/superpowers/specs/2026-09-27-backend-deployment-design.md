@@ -63,6 +63,13 @@ The image is **built in CI and pulled on the box, never built there**:
 `uv sync` compiles cv-engine and fetches/compiles LiteRT from source
 (10+ min, memory-hungry), which would OOM a small instance.
 
+CI (`.github/workflows/ci.yml`) builds the image on every run so a broken
+Dockerfile fails the PR that broke it, but pushes to GHCR only from
+`main` and only behind `needs: [cv-engine, backend, frontend]`. An image
+tagged `:latest` is therefore always one that passed the full suite —
+the box can pull blindly. Deploy itself stays a manual pull, so a green
+main never restarts a running instance on its own.
+
 ## Access control
 
 `backend/app/security.py` — one `require_api_key` dependency comparing an

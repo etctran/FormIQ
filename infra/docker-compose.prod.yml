@@ -1,5 +1,5 @@
 # Backend only, on one host with a durable EBS-backed bind mount.
-# The image is built and pushed by .github/workflows/deploy.yml — never
+# The image is built and pushed by .github/workflows/ci.yml — never
 # built here: compiling cv-engine + LiteRT from source needs more RAM
 # than a small instance has.
 #

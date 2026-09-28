@@ -26,3 +26,6 @@ backend/data/*.db
 
 # Superpowers scratch (brainstorm mockups, SDD workspaces)
 .superpowers/
+
+# CI compiler cache
+.ccache/
