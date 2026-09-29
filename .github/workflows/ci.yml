@@ -137,8 +137,10 @@ jobs:
           context: .
           file: infra/docker/backend.Dockerfile
           push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          # Hardcoded lowercase: ${{ github.repository }} is
+          # "etctran/FormIQ", and registry names must be lowercase.
           tags: |
-            ghcr.io/${{ github.repository }}/backend:latest
-            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+            ghcr.io/etctran/formiq/backend:latest
+            ghcr.io/etctran/formiq/backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
